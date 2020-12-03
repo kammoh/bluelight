@@ -1,0 +1,9 @@
+[design]
+name='Xoodyak_KM'
+[design.rtl]
+sources = [
+    'mkXoodyakWrapper.v',
+]
+
+
+top = 'mkXoodyakWrapper'
