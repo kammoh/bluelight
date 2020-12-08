@@ -1,0 +1,8 @@
+000 GetPdiInstruction
+001 GetSdiInstruction
+010 GetPdiHeader
+011 GetSdiHeader
+100 GetPdiData
+101 GetTag
+110 EnqTagHeader
+111 GetSdiData

@@ -30,21 +30,25 @@ module mkBusSender#(a dflt) (BusSender#(a))
 
    interface FIFO in;
       method Action deq;
-	 deq_deq.send;
+         deq_deq.send;
       endmethod
       method enq   = fifof.enq;
       method first = fifof.first;
       method clear = fifof.clear;
    endinterface
+
    interface BusSend out;
       method a data;
-	 return data_wire;
+         return data_wire;
       endmethod
       method Bool valid;
-	 return fifof.notEmpty;
+         return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return False;
       endmethod
       method Action ready(Bool value);
-	 if (value) deq_ready.send;
+         if (value) deq_ready.send;
       endmethod
    endinterface
 
@@ -65,21 +69,25 @@ module mkBusSenderDD#(a dflt) (BusSender#(a))
 
    interface FIFO in;
       method Action deq;
-	 deq_deq.send;
+         deq_deq.send;
       endmethod
       method enq   = fifof.enq;
       method first = data_wire;
       method clear = fifof.clear;
    endinterface
+
    interface BusSend out;
       method a data;
-	 return data_wire;
+         return data_wire;
       endmethod
       method Bool valid;
-	 return fifof.notEmpty;
+         return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return False;
       endmethod
       method Action ready(Bool value);
-	 if (value) deq_ready.send;
+         if (value) deq_ready.send;
       endmethod
    endinterface
 
@@ -147,13 +155,16 @@ module mkSizedBusSender#(a dflt, Integer size) (BusSender#(a))
    endinterface
    interface BusSend out;
       method a data;
-	 return data_wire;
+         return data_wire;
       endmethod
       method Bool valid;
-	 return fifof.notEmpty;
+        return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return False;
       endmethod
       method Action ready(Bool value);
-	 if (value) deq_ready.send;
+         if (value) deq_ready.send;
       endmethod
    endinterface
 
@@ -174,18 +185,19 @@ module mkSizedBusReceiver#(Integer size) (BusReceiver#(a))
 
    interface BusRecv in;
       method Action data(a value);
-	 data_wire <= value;
+	      data_wire <= value;
       endmethod
       method Action valid(Bool value);
-	 if (value) enq_valid.send;
+	      if (value) enq_valid.send;
       endmethod
       method Bool ready;
-	 return fifof.notFull;
+	      return fifof.notFull;
       endmethod
    endinterface
+   
    interface FIFO out;
       method Action enq(a ignore);
-	 enq_enq.send;
+         enq_enq.send;
       endmethod
       method deq   = fifof.deq;
       method first = fifof.first;
@@ -223,15 +235,19 @@ module mkBypassBusSender#(a dflt) (BusSender#(a))
       method first = fifof.first;
       method clear = fifof.clear;
    endinterface
+
    interface BusSend out;
       method a data;
-	 return data_wire;
+         return data_wire;
       endmethod
       method Bool valid;
-	 return fifof.notEmpty;
+         return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return False;
       endmethod
       method Action ready(Bool value);
-	 if (value) deq_ready.send;
+	      if (value) deq_ready.send;
       endmethod
    endinterface
 
@@ -301,15 +317,19 @@ module mkPipelineBusSender#(a dflt) (BusSender#(a))
       method first = fifof.first;
       method clear = fifof.clear;
    endinterface
+
    interface BusSend out;
       method a data;
-	 return data_wire;
+         return data_wire;
       endmethod
       method Bool valid;
-	 return fifof.notEmpty;
+         return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return False;
       endmethod
       method Action ready(Bool value);
-	 if (value) deq_ready.send;
+         if (value) deq_ready.send;
       endmethod
    endinterface
 

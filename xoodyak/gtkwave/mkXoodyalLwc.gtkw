@@ -1,0 +1,68 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Mon Dec  7 06:27:46 2020
+[*]
+[dumpfile] "/Users/kamyar/venona_home/src/bluelight/xoodyak/sim_build/dump.vcd"
+[dumpfile_mtime] "Mon Dec  7 06:26:11 2020"
+[dumpfile_size] 278835
+[savefile] "/Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/mkXoodyalLwc.gtkw"
+[timestart] 0
+[size] 1202 712
+[pos] -1 -1
+*-7.483566 251 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] top.
+[treeopen] top.mkXoodyakLwc.
+[sst_width] 261
+[signals_width] 267
+[sst_expanded] 1
+[sst_vpaned_height] 195
+@28
+top.mkXoodyakLwc.clk
+@22
+top.mkXoodyakLwc.pdi_data[31:0]
+@28
+top.mkXoodyakLwc.pdi_valid
+top.mkXoodyakLwc.pdi_ready
+@22
+top.mkXoodyakLwc.sdi_data[31:0]
+@28
+top.mkXoodyakLwc.sdi_valid
+top.mkXoodyakLwc.sdi_ready
+@22
+top.mkXoodyakLwc.do_data[31:0]
+@28
+top.mkXoodyakLwc.do_valid
+top.mkXoodyakLwc.do_ready
+@200
+-
+@28
+top.mkXoodyakLwc.lwc_headersFifo_rv$EN
+@22
+top.mkXoodyakLwc.lwc_headersFifo_rv[32:0]
+top.mkXoodyakLwc.lwc_headersFifo_rv$D_IN[32:0]
+@2028
+^1 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Lwc::InputState.gwtr
+top.mkXoodyakLwc.lwc_inState[2:0]
+@2029
+^2 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Lwc::OutputState.gwtr
+top.mkXoodyakLwc.lwc_outState[1:0]
+@200
+-
+@28
+top.mkXoodyakLwc.xoodyak.receive_empty
+top.mkXoodyakLwc.xoodyak.RDY_receive
+top.mkXoodyakLwc.xoodyak.EN_receive
+top.mkXoodyakLwc.xoodyak.CAN_FIRE_receive
+top.mkXoodyakLwc.xoodyak.WILL_FIRE_receive
+@22
+top.mkXoodyakLwc.xoodyak.receive_typ[3:0]
+@28
+top.mkXoodyakLwc.xoodyak.receive_empty
+top.mkXoodyakLwc.xoodyak.CAN_FIRE_bdi_enq
+top.mkXoodyakLwc.xoodyak.EN_bdi_enq
+top.mkXoodyakLwc.xoodyak.RDY_bdi_enq
+top.mkXoodyakLwc.xoodyak.WILL_FIRE_bdi_enq
+@22
+top.mkXoodyakLwc.xoodyak.bdi_enq_el[34:0]
+[pattern_trace] 1
+[pattern_trace] 0

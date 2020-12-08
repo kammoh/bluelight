@@ -1,9 +1,69 @@
-[design]
-name='Xoodyak_KM'
+[[project]]
+name = "Xoodyak in Bluespec"
+description = "Part of the BlueLight implementations"
+author = "Kamyar Mohajerani"
+
+[[design]]
+name = 'Xoodyak_BSV'
+
 [design.rtl]
 sources = [
-    'mkXoodyakWrapper.v',
+    'Bus/BusDefines.bsv',
+    'Bus/BusFIFO.bsv',
+    'Bus/Bus.bsv',
+    'CryptoCore.bsv',
+    'XoodooDefs.bsv',
+    'SIPO.bsv',
+    'PISO.bsv',
+    'Xoodyak.bsv',
+    'LwcApi.bsv',
+    'XoodyakLwc.bsv',
 ]
+top = 'lwc'
+
+[[design]]
+name = 'Xoodyak_BSV_v'
+
+[design.lwc]
+algorithm = ['xoodyakv1', 'xoodyakv1']
+
+[design.rtl]
+sources = ['gen_rtl/FIFOL1.v', 'gen_rtl/lwc.v']
+
+top = 'lwc'
+clock_port = 'clk'
+
+[design.tb]
+sources = [
+    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_rtl/NIST_LWAPI_pkg.vhd",
+    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB_pkg.vhd",
+    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB.vhd",
+    # "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB_wrapper_conf.vhd",
+]
+top = "LWC_TB"
+# configuration_specification = "LWC_TB_wrapper_conf"
 
 
-top = 'mkXoodyakWrapper'
+[design.tb.generics]
+# G_FNAME_PDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/pdi.txt"
+# G_FNAME_SDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/sdi.txt"
+# G_FNAME_DO.file  = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/do.txt"
+G_FNAME_PDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/pdi.txt"
+G_FNAME_SDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/sdi.txt"
+G_FNAME_DO.file  = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/do.txt"
+G_TEST_MODE = 0
+G_MAX_FAILURES = 1
+
+[flows.vivado_synth]
+# clock_period = 3.285
+clock_period = 3.38
+# clock_period = 5.0
+constrain_io = false
+optimize_power = false
+strategy = 'Timing'
+fmax_low_freq = 240
+fmax_high_freq = 320
+
+[flows.vivado_sim]
+# vcd='debug.vcd'
+# stop_time='100us'

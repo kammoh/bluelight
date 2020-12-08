@@ -1,0 +1,16 @@
+## Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+*.egg-info/
+.installed.cfg
+*.egg
+
+cffi_build/
+sim_build/

@@ -2,8 +2,13 @@ package PISO;
 
 import Vector::*;
 
+export Vector::*;
+
+export PISO :: *;
+
 typedef UInt#(TLog#(TAdd#(size,1))) CountType#(numeric type size);
 
+// similar to out-side of FIFOCountIfc + FIFO.enq
 interface PISO #(numeric type size, type el_type);
   method Action enq(Vector#(size,el_type) data, CountType#(size) n); // n in 1...size
   method Action deq;
@@ -11,11 +16,13 @@ interface PISO #(numeric type size, type el_type);
   method Bool notEmpty;
   (* always_ready *)
   method el_type first;
+  (* always_ready *)
+  method CountType#(size) count;
 endinterface
 
 // Bypass PISO
 // if empty enq can happen simultanously with deq of first element 
-// module mkBypassPISO (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size));
+// module mkBypassPiso (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size));
   // RWire#(Tuple2#(Vector#(size, el_type), CountType#(size))) rwEnq <- mkRWire();
   // let pwDeq <- mkPulseWire();
   // rule update if (isValid(rwEnq.wget) || pwDeq);
@@ -44,6 +51,7 @@ endinterface
 
 
 // **** NO BYPASS
+// (* always_ready = "out.notEmpty,out.first" *)
 module mkPISO (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
   Reg#(CountType#(size)) countReg <- mkReg(0);
@@ -72,6 +80,10 @@ module mkPISO (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add
 
   method Bool notEmpty;
     return not_empty;
+  endmethod
+
+  method CountType#(size) count;
+    return countReg;
   endmethod
 
 endmodule : mkPISO

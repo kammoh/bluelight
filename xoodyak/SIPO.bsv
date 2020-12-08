@@ -1,14 +1,21 @@
 package SIPO;
 
 import Vector::*;
+import PISO::*;
 
+export SIPO::*;
+export Vector::*;
 
 interface SIPO #(numeric type size, type el_type);
   method Action enq(el_type in_data); 
   method Action deq;
-  method UInt#(TLog#(TAdd#(size,1))) count;
-  method UInt#(TLog#(TAdd#(size,1))) countPlusOne;
+  (* always_ready *)
+  method CountType#(size) count;
+  (* always_ready *)
   method Bool isFull;
+  (* always_ready *)
+  method Bool notFull;
+  (* always_ready *)
   method Vector#(size, el_type) data;
 endinterface
 
@@ -16,14 +23,11 @@ endinterface
 // if full enq can happen simultanously with deq of first element 
 module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
-  Reg#(UInt#(TLog#(TAdd#(size,1)))) count_reg <- mkReg(0);
-  UInt#(TLog#(TAdd#(size,1))) count_plus_one = count_reg + 1;
+  Reg#(CountType#(size)) count_reg <- mkReg(0);
   RWire#(el_type) rwEnq <- mkRWire();
   let pwDeq <- mkPulseWire();
 
-
-
-  Bool full = (count_reg == fromInteger(valueOf(size)));
+  Bool full = count_reg == fromInteger(valueOf(size));
   
   (* fire_when_enabled, no_implicit_conditions *)
   rule update if (isValid(rwEnq.wget) || pwDeq);
@@ -34,7 +38,7 @@ module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz
           if (pwDeq) // simultanous enq & deq
             count_reg <= 1;
           else // enq only
-            count_reg <= count_plus_one;
+            count_reg <= count_reg + 1;
         end
       tagged Invalid: // deq only
         count_reg <= 0;
@@ -53,30 +57,29 @@ module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz
     return vec;
   endmethod
 
-  method UInt#(TLog#(TAdd#(size,1))) count;
+  method CountType#(size) count;
     return count_reg;
-  endmethod
-
-  method UInt#(TLog#(TAdd#(size,1))) countPlusOne;
-    return count_plus_one;
   endmethod
 
   method Bool isFull;
     return full;
+  endmethod
+
+  method Bool notFull;
+    return !full;
   endmethod
 endmodule : mkPipelineSIPO
 
 
 module mkSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
-  Reg#(UInt#(TLog#(TAdd#(size,1)))) count_reg <- mkReg(0);
-  UInt#(TLog#(TAdd#(size,1))) count_plus_one = count_reg + 1;
+  Reg#(CountType#(size)) count_reg <- mkReg(0);
 
-  Bool full = (count_reg == fromInteger(valueOf(size)));
+  Bool full = count_reg == fromInteger(valueOf(size));
 
   method Action enq(el_type v) if (!full);
     vec <= shiftInAtN(vec, v);
-    count_reg <= count_plus_one;
+    count_reg <= count_reg + 1;
   endmethod
         
   method Action deq if (full);
@@ -87,18 +90,38 @@ module mkSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
     return vec;
   endmethod
 
-  method UInt#(TLog#(TAdd#(size,1))) count;
+  method CountType#(size) count;
     return count_reg;
-  endmethod
-
-  method UInt#(TLog#(TAdd#(size,1))) countPlusOne;
-    return count_plus_one;
   endmethod
 
   method Bool isFull;
     return full;
   endmethod
 
+  method Bool notFull;
+    return !full;
+  endmethod
+
 endmodule : mkSIPO
+
+
+
+interface MyShiftReg #(numeric type size, type el_type);
+  (* always_ready *)
+  method Action enq(el_type in_data); 
+  (* always_ready *)
+  method Vector#(size, el_type) data;
+endinterface
+
+module mkMyShiftReg (MyShiftReg#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
+  Reg#(Vector#(size, el_type)) vec <- mkRegU;
+
+  method Action enq(el_type v);
+    vec <= shiftInAtN(vec, v);
+  endmethod
+  method Vector#(size, el_type) data;
+    return vec;
+  endmethod
+endmodule : mkMyShiftReg
 
 endpackage : SIPO

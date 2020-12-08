@@ -1,0 +1,76 @@
+[*]
+[*] GTKWave Analyzer v3.3.108 (w)1999-2020 BSI
+[*] Mon Dec  7 10:30:31 2020
+[*]
+[dumpfile] "/Users/kamyar/venona_home/src/bluelight/xoodyak/sim_build/dump.vcd"
+[dumpfile_mtime] "Mon Dec  7 10:30:10 2020"
+[dumpfile_size] 342900
+[savefile] "/Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/mkXoodyakLwc.gtkw"
+[timestart] 0
+[size] 1425 779
+[pos] -1 -1
+*-8.000000 441 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] top.
+[treeopen] top.mkXoodyakLwc.
+[sst_width] 261
+[signals_width] 420
+[sst_expanded] 1
+[sst_vpaned_height] 219
+@28
+top.clk
+top.mkXoodyakLwc.rst
+@22
+top.mkXoodyakLwc.pdi_data[31:0]
+@28
+top.pdi_valid
+top.pdi_ready
+@22
+top.sdi_data[31:0]
+@28
+top.sdi_valid
+top.sdi_ready
+@22
+top.mkXoodyakLwc.do_data[31:0]
+@28
+top.mkXoodyakLwc.do_valid
+top.mkXoodyakLwc.do_ready
+@200
+-
+@22
+top.mkXoodyakLwc.lwc_headersFifo_rv[32:0]
+@2028
+^1 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Lwc::InputState.gwtr
+top.mkXoodyakLwc.lwc_inState[2:0]
+@24
+top.mkXoodyakLwc.lwc_inWordCounter[13:0]
+@28
+top.mkXoodyakLwc.lwc_inSegLast
+@2028
+^2 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Lwc::OutputState.gwtr
+top.mkXoodyakLwc.lwc_outState[1:0]
+@28
+top.mkXoodyakLwc.lwc_inSegEoT
+top.mkXoodyakLwc.WILL_FIRE_RL_lwc_rl_out_data
+@200
+-
+@2028
+^3 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Xoodyak::InputState.gwtr
+top.mkXoodyakLwc.xoodyak_inState[1:0]
+^4 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/Xoodyak::TransformState.gwtr
+top.mkXoodyakLwc.xoodyak_xState[1:0]
+@22
+top.mkXoodyakLwc.lwc_inWordCounter[13:0]
+@28
+top.mkXoodyakLwc.lwc_finalRemainBytes[1:0]
+top.mkXoodyakLwc.xoodyak_inLastBlock
+top.mkXoodyakLwc.xoodyak_zfilled
+@23
+top.mkXoodyakLwc.xoodyak_sipo_vec[351:0]
+@4022
+^>1 /Users/kamyar/venona_home/src/bluelight/xoodyak/gtkwave/xoodyak_gtkwave_state_formatter.py
+top.mkXoodyakLwc.xoodyak_xoodooState[383:0]
+@24
+top.mkXoodyakLwc.xoodyak_round_counter[3:0]
+top.mkXoodyakLwc.xoodyak_piso_countReg[2:0]
+[pattern_trace] 1
+[pattern_trace] 0

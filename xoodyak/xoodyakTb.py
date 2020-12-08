@@ -1,175 +1,140 @@
-import random
-from enum import IntEnum, Enum
 import sys
-from typing import List
+import os
+import inspect
 
-import cocotb
-from cocotb.clock import Clock
-from cocotb.handle import HierarchyObject, SimHandleBase
-from cocotb.triggers import FallingEdge, ReadWrite, Timer, RisingEdge, ReadOnly
-from cocotb.monitors import Monitor
-
-from xoodyak import Xoodyak, rand_bytes
-
-from valid_ready_interface import ValidReadyDriver, ValidReadyMonitor
-from types import SimpleNamespace
+from cocotb.triggers import Join
+from cocotb.handle import SimHandleBase
 
 
-class SegmentType(IntEnum):
-    @classmethod
-    def from_byte(cls, b):
-        return SegmentType(b)
+script_dir = os.path.realpath(os.path.dirname(
+    inspect.getfile(inspect.currentframe())))
 
-    AD = 0b0001
-    PT = 0b0100
-    CT = 0b0101
-    TAG = 0b1000
-    KEY = 0b1100
-    NPUB = 0b1101
-    HM = 0b0111
-    HASH_VALUE = 0b1001
+try:
+    from .pyxoodyak import Xoodyak
+    from .pyxoodyak.xoodyak_cref import XoodyakCref
+    from .pyxoodyak.utils import rand_bytes
+except:
+    sys.path.insert(0, script_dir)
+    from pyxoodyak import Xoodyak
+    from pyxoodyak.xoodyak_cref import XoodyakCref
+    from pyxoodyak.utils import rand_bytes
 
-
-class SegmentHeader():
-    def __init__(self, segment_type, len, last, eot, eoi, partial=0) -> None:
-        self.segment_type = segment_type
-        self.segment_len = len
-        self.partial = partial
-        self.eoi = eoi
-        self.eot = eot
-        self.last = last
-
-    def __str__(self):
-        s = f'{self.segment_type} len={self.segment_len}'
-        if self.eoi:
-            s += ' EOI'
-        if self.eot:
-            s += ' EOT'
-        if self.last:
-            s += ' Last'
-        if self.partial:
-            s += ' Partial'
-        return s
-
-    @classmethod
-    def from_word(cls, w):
-        sn = (w >> 24) & 0xf
-        return SegmentHeader(SegmentType.from_byte((w >> 28) & 0xf), len=(w >> 16) & 0xffff, last=sn & 1, eot=(sn >> 1) & 1, eoi=(sn >> 2) & 1, partial=(sn >> 3) & 1)
-
-    def __int__(self):
-        return (int(self.segment_type) << 28) | (self.partial << 27) | (
-            self.eoi << 26) | (self.eot << 25) | (self.last << 24) | (self.segment_len & 0xffff)
-
-
-IO_WIDTH = 32
-
-
-class Opcode(IntEnum):
-    HASH = 0b1000
-    ENC = 0b0010
-    DEC = 0b0011
-    LDKEY = 0b0100
-    ACTKEY = 0b0111
-
-
-class Instruction:
-    def __init__(self, op_code) -> None:
-        self.op_code = op_code
-
-    @classmethod
-    def from_word(cls, w):
-        return Instruction(op_code=Opcode((w >> 12) & 0xf))
-
-    def __int__(self):
-        return int(self.op_code) << (IO_WIDTH - 4)
-
-
-class Tb:
-    def __init__(self, dut: SimHandleBase, input_buses: List[str], output_buses: List[str], debug=False, clk_period=10) -> None:
-        self.dut = dut
-        if hasattr(dut, 'rst_n'):
-            self.reset_val = 0
-            self.reset = dut.rst_n
-        else:
-            self.reset_val = 1
-            self.reset = dut.rst
-        self.clock = dut.clk
-        self.clk_period = clk_period
-        self.clkedge = RisingEdge(self.clock)
-        self.drivers = SimpleNamespace(**{k: ValidReadyDriver(dut, k, self.clock, debug=debug) for k in input_buses})
-        self.monitors = {k: ValidReadyMonitor(dut, k, self.clock, debug=debug) for k in output_buses}
-
-    async def reset_dut(self, duration):
-        self.reset <= self.reset_val
-        await Timer(duration)
-        self.reset <= ~(self.reset_val)
-        self.reset._log.debug("Reset complete")
-        await self.clkedge
-        await self.clkedge
-
-    async def start(self):
-        clock = Clock(self.clock, period=self.clk_period)
-        cocotb.fork(clock.start())
-        await cocotb.fork(self.reset_dut(2.5*self.clk_period))
-        for _mon_name, mon in self.monitors.items():
-            cocotb.fork(mon())
-
-
-class LwcTb(Tb):
-    def __init__(self, dut: SimHandleBase, debug=False) -> None:
-        super().__init__(dut, input_buses=['pdi', 'sdi'], output_buses=['pdo'], debug=debug)
-
-    @staticmethod
-    def bytes_to_words(x: bytes, word_bytes=4):
-        last = len(x)
-        return [int.from_bytes(x[i:min(i + word_bytes, last)], 'little') for i in range(0, len(x), word_bytes)]
-
-    async def send_segment(self, segment_type, segment_data):
-        sender = self.drivers.pdi
-        eoi = 0  # not required
-        last = 0
-        if segment_type == SegmentType.KEY:
-            sender = self.drivers.sdi
-            eoi = 1
-            last = 1
-        if segment_type == SegmentType.CT or segment_type == SegmentType.PT or segment_type == SegmentType.HM:
-            last = 1
-            eoi = 1
-        # TODO FIXME multi segment
-        await sender(SegmentHeader(segment_type, len(segment_data), last=last, eot=1, eoi=eoi))
-        for w in self.bytes_to_words(segment_data):
-            await sender(w)
-
-
-class OpCode(IntEnum):
-    Encrypt = 0
-    Decrypt = 1
-    Hash = 2
+try:
+    from .cocolight import *
+except:
+    cocolight_dir = os.path.dirname(script_dir)
+    sys.path.insert(0, cocolight_dir)
+    from cocolight import *
 
 
 @cocotb.test()
 async def test_dut(dut: SimHandleBase):
-    ref = Xoodyak()
+    debug = os.environ.get('XOODYAK_DEBUG', False)
 
-    tb = LwcTb(dut, debug=True)
+    # debug = True
+
+    try:
+        debug = bool(int(debug))
+    except:
+        debug = bool(debug)
+
+    print(f'XOODYAK_DEBUG={debug}')
+    # ref = Xoodyak(debug=debug)
+    ref = XoodyakCref()
+
+    tb = LwcTb(dut, debug=debug, max_in_stalls=3, max_out_stalls=5)
+
+    # key = bytes.fromhex('000102030405060708090A0B0C0D0E0F')
+    # key =   bytes.fromhex('8763857D9B8CD0F96C3A6C119C3A8BFD')
+    # npub = bytes.fromhex('6FC9B4E2F3644E8457F148974F81A049')
+
+    # ad = bytes(0)
+    # pt = bytes(0)
+    # key = rand_bytes(16) # 128 bits
+    # nonce = rand_bytes(16) # always 128 bits
+    # ad = bytes.fromhex('20567811')
+    # pt = rand_bytes(64)
+
+    # tag, ct = ref.encrypt(pt, ad, npub, key)
+    # print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+    # tb.encrypt_test(key, npub, ad, pt, ct, tag)
+
+    full_sizes = list(range(0, 43)) + \
+        [0, 3, 48, 49, 59, 60, 61, 63, 64, 1535, 1536, 1537]
+
+    short_size = [0, 1,  15, 16, 43, 44, 63, 64]
+    quick_size = list(range(0, 18)) + [43, 44, 45, 63, 64, 65, 1536, 1537]
+
+    single = [3]
+
+    sizes = full_sizes  # quick_size
+    rand_inputs = True  # True
+
+    # if debug:
+    #     sizes = single #short_size
+    #     rand_inputs = False
+
+    def gen_inputs(numbytes):
+        s = 0 if numbytes > 1 else 1
+        return rand_bytes(numbytes) if rand_inputs else bytes([i % 255 for i in range(s, numbytes+s)])
     await tb.start()
 
-    key = bytes.fromhex('000102030405060708090A0B0C0D0E0F')
-    nonce = bytes.fromhex('101112131415161708090A0B0C0D0E0F')
-    ad = bytes.fromhex('567811')
-    pt = bytes.fromhex('123411')
+    def enc_tests():
+        for pt_size in sizes:
+            print(f'pt_size={pt_size}')
+            for ad_size in sizes:
 
-    ref.encrypt(pt, ad, nonce, key)
+                key = gen_inputs(ref.CRYPTO_KEYBYTES)
+                npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
+                ad = gen_inputs(ad_size)
+                pt = gen_inputs(pt_size)
 
-    await tb.drivers.pdi(Instruction(Opcode.ACTKEY))
+                tag, ct = ref.encrypt(pt, ad, npub, key)
 
-    await tb.drivers.sdi(Instruction(Opcode.LDKEY))  # nonsense!
-    await tb.send_segment(SegmentType.KEY, key)
+                if debug:
+                    print(
+                        f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
 
-    await tb.drivers.pdi(Instruction(Opcode.ENC))
-    await tb.send_segment(SegmentType.NPUB, nonce)
-    await tb.send_segment(SegmentType.AD, ad)
-    await tb.send_segment(SegmentType.PT, pt)
+                tb.encrypt_test(key, npub, ad, pt, ct, tag)
 
-    for _ in range(30):
-        await tb.clkedge
+    def dec_tests():
+        for pt_size in sizes:
+            print(f'pt_size={pt_size}')
+            for ad_size in sizes:
+
+                key = gen_inputs(ref.CRYPTO_KEYBYTES)
+                npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
+                ad = gen_inputs(ad_size)
+                pt = gen_inputs(pt_size)
+
+                tag, ct = ref.encrypt(pt, ad, npub, key)
+
+                if debug:
+                    print(
+                        f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+
+                tb.decrypt_test(key, npub, ad, pt, ct, tag)
+
+    enc_tests()
+    await tb.launch_monitors()
+    await tb.launch_drivers()
+
+    await tb.join_drivers()
+    await tb.join_monitors()
+    print("encrypt tests done")
+
+    dec_tests()
+    await tb.launch_monitors()
+    await tb.launch_drivers()
+
+    await tb.join_drivers()
+    await tb.join_monitors()
+    print("decrypt tests done")
+
+    # await Timer(2000)
+
+    await tb.clkedge
+
+
+if __name__ == "__main__":
+    print("should be run as a cocotb module")

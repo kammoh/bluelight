@@ -33,6 +33,7 @@ endinterface
 interface BusSend#(type a);
   method a  data;
   method Bool valid;
+  method Bool last;
   (* prefix="" *)
   method Action ready((* port="ready" *) Bool value);
 endinterface
