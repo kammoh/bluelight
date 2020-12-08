@@ -12,44 +12,6 @@ import argparse
 
 import toml
 
-
-import vcd
-import vcd.gtkw
-
-
-def tr_enum(fmt, *symbols):
-    sz = ceil(log2(len(symbols)))
-    if fmt == 'hex':
-        sz = ceil(sz / 4)
-    if fmt == 'dec':
-        sz = None
-
-    return fmt, sz, [(val, sym) for val, sym in enumerate(symbols)]
-
-e1 = """
-  AD     = 4'b0001,
-  PT     = 4'b0100,
-  CT     = 4'b0101,
-  Tag    = 4'b1000,
-  Key    = 4'b1100,
-  Npub   = 4'b1101,
-  HM     = 4'b0111,
-  Digest = 4'b1001
-"""
-
-typedef_enum_re = re.compile(r'\s*typedef\s+enum\s+{\s*([^}]+)\s*}\s*(\w+)\s*', re.MULTILINE | re.DOTALL)
-
-def val_to_int(v):
-    if isinstance(v, int):
-        return ceil(log2(v+1)), v
-    m = re.match(r"(\d+)'(b|d|h|o)(\d+)", v)
-    if m:
-        sz = int(m.group(1))
-        base_char = m.group(2)
-        base = 10 if base_char == 'd' else 2 if base_char == 'b' else 16 if base_char=='h' else 8
-        return sz, int(m.group(3), base)
-    return None, int(v)
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--gen', action='store_true')
 parser.add_argument('--debug', action='store_true')
@@ -58,10 +20,32 @@ parser.add_argument('--gtkwave', action='store_true')
 
 args = parser.parse_args()
 
-
-
-
 if args.gtkwave:
+    import vcd
+    import vcd.gtkw
+
+    def tr_enum(fmt, *symbols):
+        sz = ceil(log2(len(symbols)))
+        if fmt == 'hex':
+            sz = ceil(sz / 4)
+        if fmt == 'dec':
+            sz = None
+
+        return fmt, sz, [(val, sym) for val, sym in enumerate(symbols)]
+
+
+    typedef_enum_re = re.compile(r'\s*typedef\s+enum\s+{\s*([^}]+)\s*}\s*(\w+)\s*', re.MULTILINE | re.DOTALL)
+
+    def val_to_int(v):
+        if isinstance(v, int):
+            return ceil(log2(v+1)), v
+        m = re.match(r"(\d+)'(b|d|h|o)(\d+)", v)
+        if m:
+            sz = int(m.group(1))
+            base_char = m.group(2)
+            base = 10 if base_char == 'd' else 2 if base_char == 'b' else 16 if base_char=='h' else 8
+            return sz, int(m.group(3), base)
+        return None, int(v)
 
     translations = {
         'Lwc::OutputState': tr_enum('bin', 'SendHeader', 'SendData', 'VerifyTag', 'SendStatus'),

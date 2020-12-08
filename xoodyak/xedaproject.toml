@@ -67,3 +67,7 @@ fmax_high_freq = 320
 [flows.vivado_sim]
 # vcd='debug.vcd'
 # stop_time='100us'
+
+[flows.diamond_synth]
+fmax_low_freq = 130
+fmax_high_freq = 180

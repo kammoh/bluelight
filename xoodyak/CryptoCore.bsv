@@ -67,15 +67,19 @@ typedef enum {
 } CoreOpType deriving (Bits, Eq, FShow);
 
 typedef struct {
-  CoreWord word;
-  // last word of the segment type
-  Bool lot;
-  Bit#(2) padarg;
+  CoreWord word;  // data word
+  Bool lot;       // last word of the type
+  Bit#(2) padarg; // padding argument, number of valid bytes or 0 all valid
 } BdIO deriving (Bits, Eq);
 
 interface CryptoCoreIfc;
+  // after fire, words of type `typ` will be sent to CryptoCore, if not empty
   method Action receive(SegmentType typ, Bool empty);
-  interface FifoIn#(BdIO) bdi;
+  
+  // input to CryptoCore
+  interface FifoIn#(BdIO)  bdi;
+
+  // output from CryptoCore
   interface FifoOut#(BdIO) bdo;
 endinterface
 
