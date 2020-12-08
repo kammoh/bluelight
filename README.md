@@ -1,4 +1,7 @@
-# BlueLight: Bluespec implementations of Lightweight Cryptography
+# BlueLight and CocoLight
+
+## BlueLight an: Bluespec implementations of Lightweight Cryptography
+
 
 [Bluespec SystemVerilog](https://github.com/B-Lang-org) implementations of NIST [Lightweight Cryptography](https://csrc.nist.gov/projects/lightweight-cryptography) (LWC) candidates.
 
@@ -9,7 +12,7 @@ Compliant with [LWC Hardware API](https://cryptography.gmu.edu/athena/LWC/LWC_HW
 - CryptoCore mplementations:
   - Xoodyak
 
-## BlueLight CryptoCore Interface and API
+### BlueLight CryptoCore Interface and API
 
 BdIO is used for both input and output to/from `CryptoCore`.
 ```bsv
@@ -27,3 +30,6 @@ interface CryptoCoreIfc;
   interface FifoOut#(BdIO) bdo; // output from CryptoCore
 endinterface
 ```
+
+# CocoLight
+LWC Testbench framework based on [cocotb](https://docs.cocotb.org/) Python framework.
