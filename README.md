@@ -9,10 +9,12 @@ Compliant with [LWC Hardware API](https://cryptography.gmu.edu/athena/LWC/LWC_HW
 
 - Bluespec LWC support package `LwcApi`
 
-- CryptoCore mplementations:
+- CryptoCore implementations:
   - Xoodyak
 
 ### BlueLight CryptoCore Interface and API
+
+![CryptoCore Interface](docs/BlueLight_CryptoCoreIfc.svg)
 
 BdIO is used for both input and output to/from `CryptoCore`.
 ```bsv
