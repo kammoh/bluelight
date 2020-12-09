@@ -9,7 +9,7 @@ Compliant with [LWC Hardware API](https://cryptography.gmu.edu/athena/LWC/LWC_HW
 
 - Bluespec LWC support package `LwcApi`
 
-- CryptoCore mplementations:
+- CryptoCore implementations:
   - Xoodyak
 
 ### BlueLight CryptoCore Interface and API
