@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
+// Original version from https://github.com/B-Lang-org/bsc-contrib
+// Modified for use in BlueLight
+
 package BusFIFO;
 
 import BusDefines::*;
@@ -13,6 +16,47 @@ import FShow::*;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+////////////////////////////////////////////////////////////////////////////////
+
+
+module mkBusSenderWL#(a dflt) (BusSenderWL#(a)) provisos(Bits#(a, sa));
+
+   FIFOF#(DataLast#(a)) fifof <- mkDFIFOF(DataLast{data:dflt, last: False});
+   let data_wire = fifof.first;
+
+   PulseWire deq_ready <- mkPulseWire;
+   // PulseWire deq_deq   <- mkPulseWire;
+
+   rule do_deq (fifof.notEmpty && (deq_ready /*|| deq_deq*/));
+      fifof.deq;
+   endrule
+
+   interface FIFO in;
+      method Action deq;
+         // deq_deq.send;
+      endmethod
+      method enq   = fifof.enq;
+      method first = fifof.first;
+      method clear = fifof.clear;
+   endinterface
+
+   interface BusSendWL out;
+      method a data;
+         return data_wire.data;
+      endmethod
+      method Bool valid;
+         return fifof.notEmpty;
+      endmethod
+      method Bool last;
+         return data_wire.last;
+      endmethod
+      method Action ready(Bool value);
+         if (value) deq_ready.send;
+      endmethod
+   endinterface
+
+endmodule
+
 ////////////////////////////////////////////////////////////////////////////////
 
 module mkBusSender#(a dflt) (BusSender#(a))
@@ -44,15 +88,13 @@ module mkBusSender#(a dflt) (BusSender#(a))
       method Bool valid;
          return fifof.notEmpty;
       endmethod
-      method Bool last;
-         return False;
-      endmethod
       method Action ready(Bool value);
          if (value) deq_ready.send;
       endmethod
    endinterface
 
 endmodule
+
 
 module mkBusSenderDD#(a dflt) (BusSender#(a))
    provisos(Bits#(a, sa));
@@ -82,9 +124,6 @@ module mkBusSenderDD#(a dflt) (BusSender#(a))
       endmethod
       method Bool valid;
          return fifof.notEmpty;
-      endmethod
-      method Bool last;
-         return False;
       endmethod
       method Action ready(Bool value);
          if (value) deq_ready.send;
@@ -159,9 +198,6 @@ module mkSizedBusSender#(a dflt, Integer size) (BusSender#(a))
       endmethod
       method Bool valid;
         return fifof.notEmpty;
-      endmethod
-      method Bool last;
-         return False;
       endmethod
       method Action ready(Bool value);
          if (value) deq_ready.send;
@@ -243,9 +279,6 @@ module mkBypassBusSender#(a dflt) (BusSender#(a))
       method Bool valid;
          return fifof.notEmpty;
       endmethod
-      method Bool last;
-         return False;
-      endmethod
       method Action ready(Bool value);
 	      if (value) deq_ready.send;
       endmethod
@@ -324,9 +357,6 @@ module mkPipelineBusSender#(a dflt) (BusSender#(a))
       endmethod
       method Bool valid;
          return fifof.notEmpty;
-      endmethod
-      method Bool last;
-         return False;
       endmethod
       method Action ready(Bool value);
          if (value) deq_ready.send;

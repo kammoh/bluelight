@@ -42,7 +42,7 @@ async def test_dut(dut: SimHandleBase):
     # ref = Xoodyak(debug=debug)
     ref = XoodyakCref()
 
-    tb = LwcTb(dut, debug=debug, max_in_stalls=3, max_out_stalls=5)
+    tb = LwcTb(dut, debug=debug, max_in_stalls=0, max_out_stalls=0)
 
     # key = bytes.fromhex('000102030405060708090A0B0C0D0E0F')
     # key =   bytes.fromhex('8763857D9B8CD0F96C3A6C119C3A8BFD')
@@ -79,57 +79,55 @@ async def test_dut(dut: SimHandleBase):
         return rand_bytes(numbytes) if rand_inputs else bytes([i % 255 for i in range(s, numbytes+s)])
     await tb.start()
 
-    def enc_tests():
-        for pt_size in sizes:
-            print(f'pt_size={pt_size}')
-            for ad_size in sizes:
 
-                key = gen_inputs(ref.CRYPTO_KEYBYTES)
-                npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
-                ad = gen_inputs(ad_size)
-                pt = gen_inputs(pt_size)
+    def enc_test(ad_size, pt_size):
+        key = gen_inputs(ref.CRYPTO_KEYBYTES)
+        npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
+        ad = gen_inputs(ad_size)
+        pt = gen_inputs(pt_size)
 
-                tag, ct = ref.encrypt(pt, ad, npub, key)
+        tag, ct = ref.encrypt(pt, ad, npub, key)
 
-                if debug:
-                    print(
-                        f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+        if debug:
+            print(
+                f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
 
-                tb.encrypt_test(key, npub, ad, pt, ct, tag)
+        tb.encrypt_test(key, npub, ad, pt, ct, tag)
 
-    def dec_tests():
-        for pt_size in sizes:
-            print(f'pt_size={pt_size}')
-            for ad_size in sizes:
 
-                key = gen_inputs(ref.CRYPTO_KEYBYTES)
-                npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
-                ad = gen_inputs(ad_size)
-                pt = gen_inputs(pt_size)
 
-                tag, ct = ref.encrypt(pt, ad, npub, key)
+    def dec_test(ad_size, pt_size):
+        key = gen_inputs(ref.CRYPTO_KEYBYTES)
+        npub = gen_inputs(ref.CRYPTO_NPUBBYTES)  # always 128 bits
+        ad = gen_inputs(ad_size)
+        pt = gen_inputs(pt_size)
 
-                if debug:
-                    print(
-                        f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+        tag, ct = ref.encrypt(pt, ad, npub, key)
 
-                tb.decrypt_test(key, npub, ad, pt, ct, tag)
+        if debug:
+            print(
+                f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
 
-    enc_tests()
+        tb.decrypt_test(key, npub, ad, pt, ct, tag)
+
+
+    # enc_test(1536, 0)
+    # dec_test(ad_size=1536, pt_size=0)
+    # dec_test(ad_size=1536, pt_size=0)
+    dec_test(ad_size=0, pt_size=1536)
+
     await tb.launch_monitors()
     await tb.launch_drivers()
 
     await tb.join_drivers()
     await tb.join_monitors()
-    print("encrypt tests done")
 
-    dec_tests()
-    await tb.launch_monitors()
-    await tb.launch_drivers()
+    # await tb.launch_monitors()
+    # await tb.launch_drivers()
 
-    await tb.join_drivers()
-    await tb.join_monitors()
-    print("decrypt tests done")
+    # await tb.join_drivers()
+    # await tb.join_monitors()
+    # print("decrypt tests done")
 
     # await Timer(2000)
 

@@ -3,11 +3,10 @@ package LwcApi;
 import FIFO::*;
 import FIFOF::*;
 import SpecialFIFOs :: * ;
-import GetPut::*;
+import GetPut :: *;
 
 import Bus :: *;
-
-import CryptoCore::*;
+import CryptoCore :: *;
 
 // typedef enum {
 //   ACTKEY  = 4'b111, // -> 01 CoreOpType::OpKey  
@@ -16,11 +15,13 @@ import CryptoCore::*;
 //   HASH    = 4'b000  // -> 00 CoreOpType::OpHash 
 // } LwcApiPdiOpcodeLSB deriving (Bits, Eq);
 
+typedef DataLast#(CoreWord) CoreWordWithLast;
+
 interface LwcIfc;
   interface BusRecv#(CoreWord) pdi;
   interface BusRecv#(CoreWord) sdi;
   (* prefix = "do" *)
-  interface BusSend#(CoreWord) do_;
+  interface BusSendWL#(CoreWord) do_;
 endinterface
 
 typedef enum {
@@ -78,7 +79,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
   let inState  <- mkReg(GetPdiInstruction);
   let outState <- mkReg(SendHeader);
 
-  let doSender <- mkBusSender(0);
+  let doSender <- mkBusSenderWL(0);
 
   let inWordCounterMsbZero = inWordCounter[13:1] == 0;
   let outCounterMsbZero = outCounter[13:1] == 0;
@@ -238,7 +239,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     let typ = headerType(h);
     let eot = headerEoT(h);
     let last = headerLast(h);
-    doSender.in.enq(pack(h));
+    doSender.in.enq(CoreWordWithLast { data: pack(h), last: False } );
 
     outSegType <= typ;
     outSegLast <= last;
@@ -285,7 +286,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     
     match tagged BdIO {word:.word, lot:.lot, padarg: .padarg} = cryptoCore.bdo.first;
     match {.padded, .pw} = padWord(word, padarg, False);
-    doSender.in.enq(swapEndian(lot ? pw : word));
+    doSender.in.enq(CoreWordWithLast { data: swapEndian(lot ? pw : word), last: False} );
     let last_of_seg = outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0));
     if (last_of_seg) begin
       if (outSegLast)
@@ -303,7 +304,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
 
   (* fire_when_enabled *)
   rule rl_out_status if (outState == SendStatus);
-    doSender.in.enq({3'b111, pack(statFailure), 28'b0});
+    doSender.in.enq(CoreWordWithLast { data: {3'b111, pack(statFailure), 28'b0}, last: True });
     statFailure <= False;
     outState <= SendHeader;
   endrule

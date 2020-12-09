@@ -2,11 +2,20 @@
 //
 // SPDX-License-Identifier: BSD-3-Clause
 
+// Original version from https://github.com/B-Lang-org/bsc-contrib
+// Modified for use in BlueLight
+
 package BusDefines;
 
 import Arbiter::*;
 import Connectable::*;
 import FIFO::*;
+
+typedef struct {
+  a    data;
+  Bool last;
+} DataLast#(type a) deriving (Bits, Eq, FShow);
+
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -17,33 +26,32 @@ interface BusSender#(type a);
    interface BusSend#(a) out;
 endinterface
 
+interface BusSenderWL#(type a);
+   interface FIFO#(DataLast#(a)) in;
+   interface BusSendWL#(a)      out;
+endinterface
+
 interface BusReceiver#(type a);
    interface BusRecv#(a) in;
    interface FIFO#(a)    out;
 endinterface
 
-// (* always_ready, always_enabled *)
-// interface BusSend#(type a);
-//    method a      data;
-//    method Bool   valid;
-//    method Action ready(Bool value);
-// endinterface
-
 (* always_ready, always_enabled *)
 interface BusSend#(type a);
   method a  data;
   method Bool valid;
-  method Bool last;
   (* prefix="" *)
   method Action ready((* port="ready" *) Bool value);
 endinterface
 
-// (* always_ready, always_enabled *)
-// interface BusRecv#(type a);
-//    method Action data(a value);
-//    method Action valid(Bool value);
-//    method Bool   ready;
-// endinterface
+(* always_ready, always_enabled *)
+interface BusSendWL#(type a);
+  method a     data;
+  method Bool  last;
+  method Bool valid;
+  (* prefix="" *)
+  method Action ready((* port="ready" *) Bool value);
+endinterface
 
 (* always_ready, always_enabled *)
 interface BusRecv#(type a);

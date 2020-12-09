@@ -8,6 +8,8 @@ import Vector::*;
 `define IO_WIDTH 32
 `endif
 
+typedef Bit#(`IO_WIDTH) CoreWord;
+
 // TODO FIXME as cryptoCore parameter or constant? `define?
 // used in LwcApi
 Integer crypto_abytes = 16;     // size of tag in bytes
@@ -45,8 +47,6 @@ endfunction
 
 typedef Bit#(8) Byte;
 
-// TODO configurable, maybe through preprocessor?
-typedef Bit#(`IO_WIDTH) CoreWord;
 
 typedef enum {
   AD     = 4'b0001,
