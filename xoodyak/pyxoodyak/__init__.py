@@ -492,7 +492,9 @@ class Xoodyak(LwcAead, LwcHash):
             self.cyclist.xoodoo.add_bytes(msg[xoff:xoff+split_len] + b'\x01')
             self.cyclist.xoodoo.add_last_byte(0x01 if first else 0)
             first = False
+            self.cyclist.dump_state('-bP_x')
             self.cyclist.xoodoo.permute()
+            self.cyclist.dump_state('+aP_x')
             xoff += split_len
             xlen -= split_len
             if xlen == 0:
@@ -500,9 +502,14 @@ class Xoodyak(LwcAead, LwcHash):
         # squeeze hash
         h0 = bytes(self.cyclist.xoodoo.state.get_byte(i)
                    for i in range(Xoodyak_Rhash))
+        self.log(f'[Py] h0={h0.hex()}')
         self.cyclist.xoodoo.add_byte(0x01, 0)
+
+        self.cyclist.dump_state('-bP_Last')
         self.cyclist.xoodoo.permute()
+        self.cyclist.dump_state('+aP_Last')
         h1 = bytes(self.cyclist.xoodoo.state.get_byte(i)
                    for i in range(Xoodyak_Rhash))
+        self.log(f'[Py] h1={h1.hex()}')
 
         return h0 + h1

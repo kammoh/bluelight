@@ -236,11 +236,12 @@ class LwcTb(Tb):
             #     f'enqueuing segment {segment.header} on {sender.name}')
             sender.queue.extend(segment.to_words(width))
 
-    def expect_segment(self, segment: Segment):
-        exp_words = segment.to_words(self.io_width)
-        # self.log.debug(
-        #     f'adding expected words: {[f"0x{w:08x}" for w in exp_words]}')
-        self.monitors.do.expected.extend(exp_words)
+    def expect_segment(self, *segments: Segment):
+        for segment in segments:
+            exp_words = segment.to_words(self.io_width)
+            # self.log.debug(
+            #     f'adding expected words: {[f"0x{w:08x}" for w in exp_words]}')
+            self.monitors.do.expected.extend(exp_words)
 
     def expect_status_success(self):
         self.monitors.do.expected.extend(
@@ -248,22 +249,38 @@ class LwcTb(Tb):
 
     def encrypt_test(self, key, nonce, ad, pt, ct, tag):
         self.enqueue(Instruction(OpCode.ACTKEY))
-        self.enqueue(Instruction(OpCode.LDKEY), Segment(SegmentType.KEY, key))
-        self.enqueue(Instruction(OpCode.ENC), Segment(SegmentType.NPUB, nonce), Segment(
-            SegmentType.AD, ad), Segment(SegmentType.PT, pt))
+        self.enqueue(Instruction(OpCode.LDKEY),
+                     *Segment.segmentize(SegmentType.KEY, key))
+        self.enqueue(Instruction(OpCode.ENC),
+                     *Segment.segmentize(SegmentType.NPUB, nonce),
+                     *Segment.segmentize(SegmentType.AD, ad),
+                     *Segment.segmentize(SegmentType.PT, pt))
 
         # EOI is set to ‘0’ for output segments
-        self.expect_segment(Segment(SegmentType.CT, ct, last=0, eot=1, eoi=0))
         self.expect_segment(
-            Segment(SegmentType.TAG, tag, last=1, eot=1, eoi=0))
+            *Segment.segmentize(SegmentType.CT, ct, last=0, eot=1, eoi=0))
+        self.expect_segment(
+            *Segment.segmentize(SegmentType.TAG, tag, last=1, eot=1, eoi=0))
         self.expect_status_success()
-
 
     def decrypt_test(self, key, nonce, ad, pt, ct, tag):
         self.enqueue(Instruction(OpCode.ACTKEY))
-        self.enqueue(Instruction(OpCode.LDKEY), Segment(SegmentType.KEY, key))
-        self.enqueue(Instruction(OpCode.DEC), Segment(SegmentType.NPUB, nonce), Segment(
-            SegmentType.AD, ad), Segment(SegmentType.CT, ct), Segment(SegmentType.TAG, tag))
+        self.enqueue(Instruction(OpCode.LDKEY),
+                     *Segment.segmentize(SegmentType.KEY, key))
+        self.enqueue(Instruction(OpCode.DEC),
+                     *Segment.segmentize(SegmentType.NPUB, nonce),
+                     *Segment.segmentize(SegmentType.AD, ad),
+                     *Segment.segmentize(SegmentType.CT, ct),
+                     *Segment.segmentize(SegmentType.TAG, tag)
+                     )
 
         self.expect_segment(Segment(SegmentType.PT, pt, last=1, eot=1, eoi=0))
+        self.expect_status_success()
+
+    def hash_test(self, hm, digest):
+        self.enqueue(Instruction(OpCode.HASH),
+                     *Segment.segmentize(SegmentType.HM, hm)
+                     )
+
+        self.expect_segment(*Segment.segmentize(SegmentType.DIGEST, digest, last=1, eot=1, eoi=0))
         self.expect_status_success()

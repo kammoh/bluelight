@@ -1,8 +1,10 @@
 from enum import IntEnum
+from typing import List
 
 from .utils import bytes_to_words
 
-API_BYTEORDER = 'big'
+API_BYTEORDER = 'big'  # HW API is big-endian
+
 
 class SegmentType(IntEnum):
     @staticmethod
@@ -16,7 +18,7 @@ class SegmentType(IntEnum):
     KEY = 0b1100
     NPUB = 0b1101
     HM = 0b0111
-    HASH_VALUE = 0b1001
+    DIGEST = 0b1001
     LENGTH = 0b1010
 
 
@@ -72,6 +74,12 @@ class Segment:
         self.header = SegmentHeader(segment_type,
                                     len(data), last=last, eot=eot, eoi=eoi, partial=partial)
         self.data = data
+
+    @staticmethod
+    def segmentize(segment_type: SegmentType, data: bytes, last=None, eot=None, eoi=None, partial=0, max_bytes=2**15) -> List['Segment']:
+        if len(data) == 0:
+            return [Segment(segment_type, data, last=last, eot=eot, eoi=eoi, partial=partial)]
+        return [Segment(segment_type, data[i:i + max_bytes], last=last, eot=eot, eoi=eoi, partial=partial) for i in range(0, len(data), max_bytes)]
 
     @property
     def type(self):
