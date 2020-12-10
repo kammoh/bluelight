@@ -1,6 +1,6 @@
 # BlueLight and CocoLight
 
-## BlueLight an: Bluespec implementations of Lightweight Cryptography
+## BlueLight: Bluespec implementations of Lightweight Cryptography Candidates
 
 
 [Bluespec SystemVerilog](https://github.com/B-Lang-org) implementations of NIST [Lightweight Cryptography](https://csrc.nist.gov/projects/lightweight-cryptography) (LWC) candidates.
