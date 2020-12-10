@@ -1,6 +1,7 @@
 import sys
 import os
 import inspect
+import itertools
 
 from cocotb.triggers import Join
 from cocotb.handle import SimHandleBase
@@ -39,8 +40,8 @@ async def test_dut(dut: SimHandleBase):
         debug = bool(debug)
 
     print(f'XOODYAK_DEBUG={debug}')
-    ref = Xoodyak(debug=debug)
-    # ref = XoodyakCref()
+    # ref = Xoodyak(debug=debug)
+    ref = XoodyakCref()
 
     tb = LwcTb(dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
 
@@ -59,10 +60,9 @@ async def test_dut(dut: SimHandleBase):
     # print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
     # tb.encrypt_test(key, npub, ad, pt, ct, tag)
 
-    full_sizes = list(range(0, 43)) + \
-        [0, 3, 48, 49, 59, 60, 61, 63, 64, 1535, 1536, 1537]
+    full_sizes = list(range(0, 43)) + [61, 63, 64, 123, 127, 128, 777, 1535, 1536, 1537]
 
-    # short_size = [0, 1,  15, 16, 43, 44, 63, 64]
+    short_size = [0, 1, 15, 16, 43, 61, 64, 179]
     # quick_size = list(range(0, 18)) + [43, 44, 45, 63, 64, 65, 1536, 1537]
 
     rand_inputs = False  # True
@@ -113,26 +113,39 @@ async def test_dut(dut: SimHandleBase):
 
         tb.hash_test(hm, digest=digest)
 
-    # enc_test(1536, 0)
-    # dec_test(ad_size=1536, pt_size=0)
-    # dec_test(ad_size=1536, pt_size=0)
+    for ad_size, pt_size in itertools.product(short_size, short_size):
+        dec_test(ad_size=ad_size, pt_size=pt_size)
+        hash_test(pt_size)
+
+    for ad_size, pt_size in itertools.product(short_size, short_size):
+        enc_test(ad_size=ad_size, pt_size=pt_size)
+
+    for ad_size, pt_size in itertools.product(short_size, full_sizes):
+        enc_test(ad_size=ad_size, pt_size=pt_size)
+        dec_test(ad_size=ad_size, pt_size=pt_size)
+
+    dec_test(ad_size=1536, pt_size=0)
+    enc_test(ad_size=1536, pt_size=0)
     # dec_test(ad_size=0, pt_size=1536)
 
-    for i in range(1530, 1537):
+    for i in full_sizes + list(range(1535, 1555)):
         hash_test(i)
+
+    for ad_size, pt_size in itertools.product(short_size, short_size):
+        dec_test(ad_size=ad_size, pt_size=pt_size)
+        enc_test(ad_size=ad_size, pt_size=pt_size)
+    
+    for ad_size, pt_size in itertools.product(short_size, short_size):
+        dec_test(ad_size=ad_size, pt_size=pt_size)
+
+    for ad_size, pt_size in itertools.product(short_size, short_size):
+        enc_test(ad_size=ad_size, pt_size=pt_size)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
 
     await tb.join_drivers()
     await tb.join_monitors()
-
-    # await tb.launch_monitors()
-    # await tb.launch_drivers()
-
-    # await tb.join_drivers()
-    # await tb.join_monitors()
-    # print("decrypt tests done")
 
     # await Timer(2000)
 

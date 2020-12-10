@@ -158,7 +158,7 @@ module mkXoodyak(CryptoCoreIfc);
       if(firstSqueeze && secondSqueeze) begin
         firstSqueeze  <= False;
         xState <= Squeeze;
-      end else if (secondSqueeze) begin
+      end else if (firstSqueeze || secondSqueeze) begin
         secondSqueeze <= False;
         xState <= Squeeze;
       end else
