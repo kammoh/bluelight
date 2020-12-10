@@ -47,26 +47,28 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(Bit#(2)) outPadarg <- mkRegU;
 
   Reg#(Bool) zfilled <- mkRegU;
-  Reg#(Bool) inFirstBlock <- mkRegU;
-  Reg#(Bool) inLastBlock  <- mkRegU; // last block of the segment
-  Reg#(Bool) outLastBlock <- mkReg(False);
-  Reg#(Bool) fullAdBlock  <- mkRegU;
-  Reg#(Bool) finalSqueeze <- mkRegU;
+  Reg#(Bool) inFirstBlock  <- mkRegU;
+  Reg#(Bool) inLastBlock   <- mkRegU; // last block of the segment
+  Reg#(Bool) outLastBlock  <- mkReg(False);
+  Reg#(Bool) fullAdBlock   <- mkRegU;
+  Reg#(Bool) firstSqueeze  <- mkRegU;
+  Reg#(Bool) secondSqueeze <- mkRegU;
 
   function Byte udConst();
-    case (recv_type)
-      Key: return 8'h2;
-      Npub: return 8'h3;
+    return case (recv_type)
+      Key:  8'h2;
+      Npub: 8'h3;
       AD: 
         case (tuple2(inFirstBlock,inLastBlock)) matches
-          {True,  True}: return 8'h83;
-          {False, True}: return 8'h80;
-          {True, False}: return 8'h03;
-          default:       return 8'h00;
+          {True,  True}: 8'h83;
+          {False, True}: 8'h80;
+          {True, False}: 8'h03;
+          default:       8'h00;
         endcase
-      PT, CT: return inLastBlock ? 8'h40 : 0;
-      default: return 8'h00;
-    endcase
+      PT, CT: (inLastBlock ? 8'h40 : 0);
+      HM: (inFirstBlock ? 8'h01 : 8'h00);
+      default: 8'h00;
+    endcase;
   endfunction : udConst
 
   (* fire_when_enabled *)
@@ -78,15 +80,17 @@ module mkXoodyak(CryptoCoreIfc);
 
     round_counter <= 0;
     inFirstBlock <= False;
-    zfilled     <= False;
+    zfilled      <= False;
 
 
     if (inLastBlock && (recv_type == PT || recv_type == CT || recv_type == HM)) begin
-      outPadarg <= inPadarg;
-      finalSqueeze <= True;
+      outPadarg <= recv_type == HM ? 0 : inPadarg;
+      firstSqueeze <= True;
+      secondSqueeze <= recv_type == HM;
     end else begin
       outPadarg <= 0;
-      finalSqueeze <= False;
+      firstSqueeze  <= False;
+      secondSqueeze <= False;
     end
     inState <= inLastBlock ? InIdle : InRecv;
     inLastBlock <= False;
@@ -103,7 +107,7 @@ module mkXoodyak(CryptoCoreIfc);
       let d = sipo.data[i];
       let x = inputXorState[i];
       let lane = case (sipoFlags.data[i])
-        4'b0001 : {x[31:8], d[7:0]};
+        4'b0001 : {x[31:8],  d[7:0]};
         4'b0011 : {x[31:16], d[15:0]};
         4'b0111 : {x[31:24], d[23:0]};
         4'b1111 : d;
@@ -111,10 +115,11 @@ module mkXoodyak(CryptoCoreIfc);
       endcase;
       nextState[i] = case (recv_type)
         Key, CT: lane; // replace flagged bytes
+        HM : (inFirstBlock ? lane : x);
         default : x;
       endcase;
     end
-    XoodooLane lastLane = recv_type == Key ? 0 : last(currentState);
+    XoodooLane lastLane = ((recv_type == Key) || ((recv_type == HM) && inFirstBlock)) ? 0 : last(currentState);
     nextState[11] = {lastLane[31:24] ^ udConst, lastLane[23:1], lastLane[0] ^ pack(fullAdBlock)};
 
     xoodooState <= toChunks(nextState);
@@ -133,18 +138,32 @@ module mkXoodyak(CryptoCoreIfc);
   (* fire_when_enabled *)
   rule rl_squeeze if (xState == Squeeze);
     piso.enq(take(concat(xoodooState)), fromInteger(crypto_abytes / 4) );
-    outLastBlock <= False;
-    finalSqueeze <= False;
-    xState <= Absorb;
+    
+    if (secondSqueeze) begin // this was 1/2
+      xoodooState[0][0][0] <=  xoodooState[0][0][0] ^ 1;
+      xState <= Permute;
+    end else begin
+      outLastBlock  <= False;
+      xState <= Absorb;
+    end
+    round_counter <= 0;
+
   endrule
 
   (* fire_when_enabled, no_implicit_conditions *)
   rule rl_permute if (xState == Permute);
     xoodooState <= round(xoodooState, round_counter);
     
-    if (round_counter == fromInteger(valueOf(NumRounds) - 1) )
-      xState <= finalSqueeze ? Squeeze : Absorb;
-    else
+    if (round_counter == fromInteger(valueOf(NumRounds) - 1) ) begin
+      if(firstSqueeze && secondSqueeze) begin
+        firstSqueeze  <= False;
+        xState <= Squeeze;
+      end else if (secondSqueeze) begin
+        secondSqueeze <= False;
+        xState <= Squeeze;
+      end else
+        xState <= Absorb;
+    end else
       round_counter <= round_counter + 1;
   endrule
 
@@ -154,10 +173,13 @@ module mkXoodyak(CryptoCoreIfc);
     fullAdBlock <= False;
     if(!zfilled)
       sipoValidLanes <= truncate(sipo.count);
+
     
-    sipoFlags.enq(recv_type == Key ? 4'b1111 : 4'b0);  // replace key extend with zeros
+    // replace key/1st HM, extend with zeros
+    let replace = (recv_type == Key) || ((recv_type == HM) && inFirstBlock);
+    sipoFlags.enq(replace ? 4'b1111 : 4'b0); 
     if (!zfilled && !last_word_padded) begin
-      sipo.enq(recv_type == Key ? 'h100 : 1);
+      sipo.enq((recv_type == Key) ? 'h100 : 1);
     end
     else begin
       sipo.enq(0);
@@ -178,12 +200,13 @@ module mkXoodyak(CryptoCoreIfc);
   // typ:     SegmentType
   // empty:   input is empty
   method Action receive(SegmentType typ, Bool empty) if (inState == InIdle);
-    recv_type   <= typ;
-    inFirstBlock <= True;
-    inLastBlock  <= empty;
-    zfilled     <= False;
-    inState    <= empty ? InFill : InRecv;
+    recv_type        <=   typ;
+    inFirstBlock     <=  True;
+    inLastBlock      <= empty;
+    zfilled          <= False;
     last_word_padded <= False;
+
+    inState <= empty ? InFill : InRecv;
   endmethod
 
   interface FifoIn bdi;
@@ -192,7 +215,7 @@ module mkXoodyak(CryptoCoreIfc);
       match {.padded, .pw} = padWord(word, padarg, True); 
       
       sipo.enq(lot ? pw : word);
-      sipoFlags.enq(padargToFlag(lot, padarg));
+      sipoFlags.enq(recv_type == HM ? 4'b1111 : padargToFlag(lot, padarg));
 
       let will_be_full = sipo.count == fromInteger(
           case(recv_type)

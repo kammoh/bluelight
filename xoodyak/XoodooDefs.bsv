@@ -28,6 +28,8 @@ typedef TDiv#(Xoodyak_Rkout, 4) MaxOutRateLanes;// 24 bytes
 typedef Vector #(NumLanesInPlane, XoodooLane) XoodooPlane;
 typedef Vector #(NumPlanes, XoodooPlane) XoodooState;
 
+typedef Vector#(12, Vector#(4, Reg#(Byte))) XoodooStateReg;
+
 Bit#(10) roundConst[valueOf(XoodyakRounds)] = {'h058, 'h038, 'h3C0, 'h0D0, 'h120, 'h014, 'h060, 'h02C, 'h380, 'h0F0, 'h1A0, 'h012};
 
 function Action dump_state(String msg, XoodooState state);
