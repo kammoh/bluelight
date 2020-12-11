@@ -17,6 +17,7 @@ parser.add_argument('--gen', action='store_true')
 parser.add_argument('--debug', action='store_true')
 parser.add_argument('--xoodyak-debug', action='store_true')
 parser.add_argument('--gtkwave', action='store_true')
+parser.add_argument('--tests', nargs='+', help='Test functions to run')
 
 args = parser.parse_args()
 
@@ -33,8 +34,8 @@ if args.gtkwave:
 
         return fmt, sz, [(val, sym) for val, sym in enumerate(symbols)]
 
-
-    typedef_enum_re = re.compile(r'\s*typedef\s+enum\s+{\s*([^}]+)\s*}\s*(\w+)\s*', re.MULTILINE | re.DOTALL)
+    typedef_enum_re = re.compile(
+        r'\s*typedef\s+enum\s+{\s*([^}]+)\s*}\s*(\w+)\s*', re.MULTILINE | re.DOTALL)
 
     def val_to_int(v):
         if isinstance(v, int):
@@ -43,7 +44,7 @@ if args.gtkwave:
         if m:
             sz = int(m.group(1))
             base_char = m.group(2)
-            base = 10 if base_char == 'd' else 2 if base_char == 'b' else 16 if base_char=='h' else 8
+            base = 10 if base_char == 'd' else 2 if base_char == 'b' else 16 if base_char == 'h' else 8
             return sz, int(m.group(3), base)
         return None, int(v)
 
@@ -61,18 +62,21 @@ if args.gtkwave:
             for td in typedef_enum_re.finditer(c):
                 td_body = td.group(1)
                 td_name = td.group(2)
-                kvs = [ re.split('\s*=\s*', x.strip()) for x in td_body.split(',')]
-                kvs = [(x[0], x[1]) if len(x) == 2 else (x[0],i) for i,x in enumerate(kvs)]
+                kvs = [re.split('\s*=\s*', x.strip())
+                       for x in td_body.split(',')]
+                kvs = [(x[0], x[1]) if len(x) == 2 else (x[0], i)
+                       for i, x in enumerate(kvs)]
                 # print(kvs)
-                kvs = {k:val_to_int(v) for k,v in kvs }
-                values = [ v[0] for v in kvs.values()]
+                kvs = {k: val_to_int(v) for k, v in kvs}
+                values = [v[0] for v in kvs.values()]
                 sz = max(values)
                 # print(f'sz={sz} values={values}')
                 if not sz:
                     sz = log2(len(kvs))
                     print(f'>>> sz={sz}')
-                fmt = 'hex' if sz >=4 else 'bin'
-                translations[pkg + '::' + td_name] = fmt, sz, [(v,k) for k,(szz,v) in kvs.items()]
+                fmt = 'hex' if sz >= 4 else 'bin'
+                translations[pkg + '::' +
+                             td_name] = fmt, sz, [(v, k) for k, (szz, v) in kvs.items()]
 
     for tr_type_name, (datafmt, sz, tr) in translations.items():
         translate = vcd.gtkw.make_translation_filter(
@@ -114,7 +118,7 @@ bsc_flags = [
 bsc_opt_flags = [
     '-sat-yices',
     '-remove-unused-modules',
-    '-aggressive-conditions', # saw suspicious behavior with this
+    '-aggressive-conditions',  # saw suspicious behavior with this
     '-O',
     '-opt-undetermined-vals',
     '-unspecified-to', 'X',
@@ -246,13 +250,35 @@ def run_sim(top):
             '--x-assign', 'fast',  # perf: fast
         ]
 
+
+    cocotb_env = dict(COCOTB_REDUCED_LOG_FMT='1',
+                      COCOTB_ANSI_OUTPUT='1',
+                      XOODYAK_DEBUG=str(
+                          int(bool(args.xoodyak_debug))),
+                      #    RANDOM_SEED='1234',
+                      )
+
+    test_functions = args.tests
+
+    if test_functions:
+        print(f"Running the following test functions: {test_functions}")
+        cocotb_env['TESTCASE'] = ','.join(test_functions)
+
+    if args.debug:
+        cocotb_env['WAVES'] = '1'
+
+    # COMPILE_ARGS
+    # SIM_ARGS
+    # RUN_ARGS
+    # EXTRA_ARGS <-> extra_args: 
+    ## Passed to both the compile and execute phases of simulators with two rules, 
+    #  or passed to the single compile and run command for simulators which don’t 
+    #  have a distinct compilation stage.
+    # PLUSARGS
+    # SIM_BUILD
+
     sim = Verilator(extra_args=extra_args,
-                    extra_env=dict(COCOTB_REDUCED_LOG_FMT='1',
-                                   COCOTB_ANSI_OUTPUT='1',
-                                   XOODYAK_DEBUG=str(
-                                       int(bool(args.xoodyak_debug))),
-                                   #    RANDOM_SEED='1234',
-                                   ),
+                    extra_env=cocotb_env,
                     verilog_sources=verilog_sources,
                     toplevel=top,
                     module="xoodyakTb"

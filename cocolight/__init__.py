@@ -1,4 +1,5 @@
 
+from logging import Logger
 from math import ceil
 from types import SimpleNamespace
 from typing import List
@@ -8,15 +9,62 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.result import TestError, TestFailure
 from cocotb.handle import SimHandleBase
-from cocotb.triggers import (Join, ReadOnly, RisingEdge, Timer)
+from cocotb.triggers import (First, Join, ReadOnly, RisingEdge, Timer)
 
 from .hw_api import Instruction, Segment, SegmentType, OpCode, Status
 
 IO_WIDTH = 32
 
 
-class ValidReadyDriver:
+def chunks(l, n):
+    for i in range(0, len(l), n):
+        yield l[i:i+n]
+
+
+def show_messages(messages, width):
+    num_messages = len(messages)
+    digits = width // 4
+    for message_idx, words in enumerate(messages):
+        lines = [' '.join(l) for l in chunks(
+            [f'{word:0{digits}x}' for word in words], 10)]
+        preamble = f"[{message_idx+1}/{num_messages}:{len(words)}] "
+        preamble = f'{preamble:<12}'
+        print(preamble + f'\n{" "*len(preamble)}'.join(lines))
+
+
+class ForkJoinBase:
+    def __init__(self) -> None:
+        self._forked = None
+        self.name = None
+        self.log: Logger = None
+
+    def run(self):
+        ...
+
+    async def fork(self):
+        self._forked = cocotb.fork(self.run())
+        self.log.debug(f"forked {self.name}")
+
+    async def join(self, timeout=None):
+        if self._forked is not None:
+            if timeout:
+                timer = Timer(timeout)
+                first = await First(timer, self._forked)
+                if first is timer:
+                    self.log.error(f"Joining {self.name} timed out! (timeout={timeout})")
+                    raise TestFailure(f"timeout")
+            else:
+                await Join(self._forked)
+            self.log.debug(f"joined {self.name}")
+            self._forked = None
+        else:
+            self.log.error(
+                f"{self.name} joined without being previously forked!")
+
+
+class ValidReadyDriver(ForkJoinBase):
     def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0) -> None:
+        super().__init__()
         self._valid = getattr(dut, f'{name}_valid')
         self._ready = getattr(dut, f'{name}_ready')
         self.name = name
@@ -25,49 +73,38 @@ class ValidReadyDriver:
         self.clock = clock
         self._debug = debug
         self.clock_edge = RisingEdge(clock)
-        self.queue = []
-        self._forked = None
+        self.queue: List[List[int]] = []
         self.max_stalls = max_stalls
-
-        self._valid.setimmediatevalue(0)
-
         # dut._id(f"{sig_name}", extended=False) ?
         self._data_sig = getattr(self.dut, f'{self.name}_data')
-
-        self._width_nibs = (len(self._data_sig) + 3) // 4
-
-    async def run(self):
-        for word in self.queue:
-            r = random.randint(-self.max_stalls, self.max_stalls)
-            if r > 0:
-                self._valid <= 0
-                for _ in range(r):
-                    await self.clock_edge
-
-            self._valid.setimmediatevalue(1)  # TODO constrained random stalls
-            word = int(word)
-            # if self._debug:
-            #     self.log.debug(
-            #         f'putting 0x{word:0{self._width_nibs}x} on {self._data_sig._name}')
-            self._data_sig <= word
-            await ReadOnly()
-            # self.log.debug(f'self._ready.value={self._ready.value}')
-            while not self._ready.value:
-                await self.clock_edge
-                await ReadOnly()
-            await self.clock_edge
+        self._width_nibs = ceil(len(self._data_sig) / 4)
         self._valid.setimmediatevalue(0)
 
-    async def fork(self):
-        self._forked = cocotb.fork(self.run())
+    async def run(self):
+        for message in self.queue:
+            self.log.info(
+                f'Sending {len(message)} words on {self._data_sig._name}')
+            for word in message:
+                r = random.randint(-self.max_stalls, self.max_stalls)
+                if r > 0:
+                    self._valid <= 0
+                    for _ in range(r):
+                        await self.clock_edge
 
-    async def join(self):
-        if self._forked:
-            await Join(self._forked)
+                self._valid <= 1
+                word = int(word)
+                self._data_sig <= word
+                await ReadOnly()
+                while not self._ready.value:
+                    await self.clock_edge
+                    await ReadOnly()
+                await self.clock_edge
+            self._valid <= 0
 
 
-class ValidReadyMonitor:
+class ValidReadyMonitor(ForkJoinBase):
     def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0) -> None:
+        super().__init__()
         self._valid = getattr(dut, f'{name}_valid')
         self._ready = getattr(dut, f'{name}_ready')
         self.name = name
@@ -75,71 +112,71 @@ class ValidReadyMonitor:
         self.log = dut._log
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
-        self._ready.setimmediatevalue(0)
         self._data_sig = getattr(self.dut, f'{self.name}_data')
         self.failures = 0
         self.num_received_words = 0
         self._debug = debug
-        self.w = ceil(len(self._data_sig) / 4)
-        self.expected = []
-        self._forked = None
+        self.expected: List[List[int]] = []
         self.max_stalls = max_stalls
+        self._ready.setimmediatevalue(0)
 
     # TODO just single "data" field implemented
 
     async def run(self):
+        width = len(self._data_sig)
+        # TODO check expected data in correct range for the width
+        show_messages(self.expected, width)
+        digits = ceil(width / 4)
+
         if not self.expected:
             self.log.error(f"Monitor {self.name} is not expecting any data!")
             raise TestError
 
         # await ReadOnly()
-        for exp in self.expected:
-            if self._debug:
-                self.log.debug(f"expecting 0x{exp:0{self.w}x}")
-            # TODO add ready generator
-            r = random.randint(-self.max_stalls, self.max_stalls)
-            if r > 0:
-                self._ready <= 0
-                for _ in range(r):
-                    await self.clock_edge
+        for message in self.expected:
+            self.log.debug(f"Expecting {len(message)} words on '{self.name}'")
+            for exp in message:
+                # TODO add custom ready generator
+                r = random.randint(-self.max_stalls, self.max_stalls)
+                if r > 0:
+                    self._ready <= 0
+                    for _ in range(r):
+                        await self.clock_edge
 
-            self._ready <= 1
-            await ReadOnly()
-            while self._valid.value != 1:
-                await self.clock_edge  # TODO optimize by wait for valid = 1 if valid was != 0 ?
+                self._ready <= 1
                 await ReadOnly()
+                while self._valid.value != 1:
+                    await self.clock_edge  # TODO optimize by wait for valid = 1 if valid was != 0 ?
+                    await ReadOnly()
 
-            received = self._data_sig.value
+                received = self._data_sig.value
+                self.num_received_words += 1
 
-            self.num_received_words += 1
+                exp = f'{exp:0{digits}x}'
+                try:
+                    received = f'{int(received):0{digits}x}'
+                except:  # has Xs etc
+                    received = str(received)  # Note: binary string with Xs
 
-            if self._debug:
-                # print(f'Received 0x{received:0{self.w}x} from {self._data_sig._name}')
-                self.log.debug(f'Received {received} on {self.name}')
-
-            recv_x = False
-            try:
-                received = int(received)
-            except:
-                recv_x = True
-
-            # TODO add support for don't cares (X/-) in the expected words (should be binary string then?)
-            if recv_x or received != exp:
-                self.log.error(
-                    f"[monitor:{self.name}] received: 0x{int(received):0{self.w}x} expected: 0x{exp:0{self.w}x}")
-                self.failures += 1
-            await self.clock_edge
+                # TODO add support for don't cares (X/-) in the expected words (should be binary string then?)
+                if received != exp:
+                    self.log.error(
+                        f"[monitor:{self.name}] received: {received} expected: {exp}")
+                    self.failures += 1
+                await self.clock_edge
 
         self._ready <= 0
 
-    async def fork(self):
-        self._forked = cocotb.fork(self.run())
+    async def join(self, timeout=None):
+        await super().join(timeout=timeout)
 
-    async def join(self):
-        if self._forked:
-            await Join(self._forked)
+        if self.num_received_words > 0:
             self.log.info(
-                f"Monitor {self.name}: joined after receiving {self.num_received_words} words")
+                f"Monitor: '{self.name}' joined after receiving {self.num_received_words} words")
+        else:
+            self.log.error(
+                f"Monitor: '{self.name}' joined without receiving any data")
+            raise TestError
 
         if self.failures > 0:
             self.log.error(
@@ -159,8 +196,8 @@ class Tb:
             self.reset_val = 1
             self.reset = dut.rst
         self.clock = dut.clk
-        self.clk_period = clk_period
-        self.clkedge = RisingEdge(self.clock)
+        self.clock_period = clk_period
+        self.clock_edge = RisingEdge(self.clock)
         self.drivers = SimpleNamespace(
             **{k: ValidReadyDriver(dut, k, self.clock, debug=debug, max_stalls=max_in_stalls) for k in input_buses})
         self.monitors = SimpleNamespace(**{bus_name: ValidReadyMonitor(
@@ -172,47 +209,51 @@ class Tb:
         self.reset <= self.reset_val
         await Timer(duration)
         self.reset <= ~(self.reset_val)
-        await self.clkedge
+        await self.clock_edge
         self.log.debug("Reset complete")
 
     async def start(self):
         if not self.started:
-            clock = Clock(self.clock, period=self.clk_period)
+            clock = Clock(self.clock, period=self.clock_period)
             self._forked_clock = cocotb.fork(clock.start())
-            await cocotb.fork(self.reset_dut(2.5*self.clk_period))
+            await cocotb.fork(self.reset_dut(2.5*self.clock_period))
             self.started = True
 
     async def launch_monitors(self):
         for mon in self.monitors.__dict__.values():
-            self.log.info(f"Forking monitor {mon.name}")
             await mon.fork()
 
     async def launch_drivers(self):
         for driver in self.drivers.__dict__.values():
-            self.log.info(f"Forking driver {driver.name}")
             await driver.fork()
 
-    async def join_monitors(self):
+    async def join_monitors(self, timeout=None):
         for mon in self.monitors.__dict__.values():
-            await mon.join()
+            await mon.join(timeout)
 
-    async def join_drivers(self):
+    async def join_drivers(self, timeout=None):
         for driver in self.drivers.__dict__.values():
-            await driver.join()
+            await driver.join(timeout)
 
 
 class LwcTb(Tb):
     def __init__(self, dut: SimHandleBase, debug=False, max_in_stalls=0, max_out_stalls=0) -> None:
+
         super().__init__(dut=dut,
                          input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=0, max_out_stalls=0)
+
         self.io_width = IO_WIDTH  # FIXME auto get and check from pdi sdi do
 
-    def enqueue(self, instruction: Instruction, *segments: Segment):
+        self.pdi: ValidReadyDriver = self.drivers.pdi
+        self.sdi: ValidReadyDriver = self.drivers.sdi
+        self.do: ValidReadyMonitor = self.monitors.do
+
+    def enqueue_message(self, instruction: Instruction, *segments: Segment):
         width = self.io_width
-        sender = self.drivers.sdi if instruction.op == OpCode.LDKEY else self.drivers.pdi
+        sender = self.sdi if instruction.op == OpCode.LDKEY else self.pdi
 
         # self.log.debug(f'enqueuing instruction {instruction} on {sender.name}')
-        sender.queue.extend(instruction.to_words(width))
+        message = instruction.to_words(width)
         last_idx = len(segments) - 1
         for i, segment in enumerate(segments):
             last = i == last_idx
@@ -231,56 +272,47 @@ class LwcTb(Tb):
             segment.header.eoi = eoi
             segment.header.eot = last or segments[i+1].type != segment.type
 
-            # TODO FIXME multi segment
-            # self.log.info(
-            #     f'enqueuing segment {segment.header} on {sender.name}')
-            sender.queue.extend(segment.to_words(width))
+            message.extend(segment.to_words(width))
 
-    def expect_segment(self, *segments: Segment):
+        sender.queue.append(message)
+
+    def expect_message(self, *segments: Segment, status=Status.Success):
+        message = []
         for segment in segments:
             exp_words = segment.to_words(self.io_width)
-            # self.log.debug(
-            #     f'adding expected words: {[f"0x{w:08x}" for w in exp_words]}')
-            self.monitors.do.expected.extend(exp_words)
-
-    def expect_status_success(self):
-        self.monitors.do.expected.extend(
-            Status.Success.to_words(self.io_width))
+            message.extend(exp_words)
+        message.extend(status.to_words(self.io_width))
+        self.do.expected.append(message)
 
     def encrypt_test(self, key, nonce, ad, pt, ct, tag):
-        self.enqueue(Instruction(OpCode.ACTKEY))
-        self.enqueue(Instruction(OpCode.LDKEY),
-                     *Segment.segmentize(SegmentType.KEY, key))
-        self.enqueue(Instruction(OpCode.ENC),
-                     *Segment.segmentize(SegmentType.NPUB, nonce),
-                     *Segment.segmentize(SegmentType.AD, ad),
-                     *Segment.segmentize(SegmentType.PT, pt))
-
+        self.enqueue_message(Instruction(OpCode.ACTKEY))
+        self.enqueue_message(Instruction(OpCode.LDKEY),
+                             *Segment.segmentize(SegmentType.KEY, key))
+        self.enqueue_message(Instruction(OpCode.ENC),
+                             *Segment.segmentize(SegmentType.NPUB, nonce),
+                             *Segment.segmentize(SegmentType.AD, ad),
+                             *Segment.segmentize(SegmentType.PT, pt))
         # EOI is set to ‘0’ for output segments
-        self.expect_segment(
-            *Segment.segmentize(SegmentType.CT, ct, last=0, eot=1, eoi=0))
-        self.expect_segment(
-            *Segment.segmentize(SegmentType.TAG, tag, last=1, eot=1, eoi=0))
-        self.expect_status_success()
+        self.expect_message(
+            *Segment.segmentize(SegmentType.CT, ct, last=0, eot=1, eoi=0),
+            *Segment.segmentize(SegmentType.TAG, tag, last=1, eot=1, eoi=0)
+        )
 
     def decrypt_test(self, key, nonce, ad, pt, ct, tag):
-        self.enqueue(Instruction(OpCode.ACTKEY))
-        self.enqueue(Instruction(OpCode.LDKEY),
-                     *Segment.segmentize(SegmentType.KEY, key))
-        self.enqueue(Instruction(OpCode.DEC),
-                     *Segment.segmentize(SegmentType.NPUB, nonce),
-                     *Segment.segmentize(SegmentType.AD, ad),
-                     *Segment.segmentize(SegmentType.CT, ct),
-                     *Segment.segmentize(SegmentType.TAG, tag)
-                     )
-
-        self.expect_segment(Segment(SegmentType.PT, pt, last=1, eot=1, eoi=0))
-        self.expect_status_success()
+        self.enqueue_message(Instruction(OpCode.ACTKEY))
+        self.enqueue_message(Instruction(OpCode.LDKEY),
+                             *Segment.segmentize(SegmentType.KEY, key))
+        self.enqueue_message(Instruction(OpCode.DEC),
+                             *Segment.segmentize(SegmentType.NPUB, nonce),
+                             *Segment.segmentize(SegmentType.AD, ad),
+                             *Segment.segmentize(SegmentType.CT, ct),
+                             *Segment.segmentize(SegmentType.TAG, tag)
+                             )
+        self.expect_message(Segment(SegmentType.PT, pt, last=1, eot=1, eoi=0))
 
     def hash_test(self, hm, digest):
-        self.enqueue(Instruction(OpCode.HASH),
-                     *Segment.segmentize(SegmentType.HM, hm)
-                     )
-
-        self.expect_segment(*Segment.segmentize(SegmentType.DIGEST, digest, last=1, eot=1, eoi=0))
-        self.expect_status_success()
+        self.enqueue_message(Instruction(OpCode.HASH),
+                             *Segment.segmentize(SegmentType.HM, hm)
+                             )
+        self.expect_message(
+            *Segment.segmentize(SegmentType.DIGEST, digest, last=1, eot=1, eoi=0))
