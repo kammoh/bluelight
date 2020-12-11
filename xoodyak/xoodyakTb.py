@@ -5,6 +5,7 @@ import itertools
 
 from cocotb.triggers import Join
 from cocotb.handle import SimHandleBase
+from cocotb.utils import get_sim_time
 
 
 script_dir = os.path.realpath(os.path.dirname(
@@ -28,47 +29,12 @@ except:
     from cocolight import *
 
 
-class XoodyakRefCheckerTb(LwcTb):
+class XoodyakRefCheckerTb(LwcRefCheckerTb):
     def __init__(self, dut: SimHandleBase, debug, max_in_stalls, max_out_stalls) -> None:
-        super().__init__(dut, debug=debug, max_in_stalls=max_in_stalls,
+        # ref = Xoodyak(debug)
+        ref = XoodyakCref()
+        super().__init__(dut, ref, debug=debug, max_in_stalls=max_in_stalls,
                          max_out_stalls=max_out_stalls)
-        self.debug = debug
-
-        # ref = Xoodyak(debug=debug)
-        self.ref = XoodyakCref()
-        self.rand_inputs = not debug
-
-    def gen_inputs(self, numbytes):
-        s = 0 if numbytes > 1 else 1
-        return rand_bytes(numbytes) if self.rand_inputs else bytes([i % 255 for i in range(s, numbytes+s)])
-
-    def xenc_test(self, ad_size, pt_size):
-        key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
-        npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
-        ad = self.gen_inputs(ad_size)
-        pt = self.gen_inputs(pt_size)
-        tag, ct = self.ref.encrypt(pt, ad, npub, key)
-        if self.debug:
-            print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
-                  f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
-        self.encrypt_test(key, npub, ad, pt, ct, tag)
-
-    def xdec_test(self, ad_size, pt_size):
-        key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
-        npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
-        ad = self.gen_inputs(ad_size)
-        pt = self.gen_inputs(pt_size)
-        tag, ct = self.ref.encrypt(pt, ad, npub, key)
-        if self.debug:
-            print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
-                  f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
-        self.decrypt_test(key, npub, ad, pt, ct, tag)
-
-    def xhash_test(self, hm_size):
-        hm = self.gen_inputs(hm_size)
-        digest = self.ref.hash(hm)
-        self.hash_test(hm, digest=digest)
-
 
 @cocotb.test()
 async def test_dut(dut: SimHandleBase):
@@ -94,7 +60,7 @@ async def test_dut(dut: SimHandleBase):
     await tb.start()
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
-        tb.xdec_test(ad_size=ad_size, pt_size=pt_size)
+        tb.xdec_test(ad_size=ad_size, ct_size=pt_size)
         tb.xhash_test(pt_size)
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
@@ -102,22 +68,22 @@ async def test_dut(dut: SimHandleBase):
 
     for ad_size, pt_size in itertools.product(short_size, full_sizes):
         tb.xenc_test(ad_size=ad_size, pt_size=pt_size)
-        tb.xdec_test(ad_size=ad_size, pt_size=pt_size)
+        tb.xdec_test(ad_size=ad_size, ct_size=pt_size)
 
-    tb.xdec_test(ad_size=1536, pt_size=0)
+    tb.xdec_test(ad_size=1536, ct_size=0)
     tb.xenc_test(ad_size=1536, pt_size=0)
     tb.xenc_test(ad_size=0, pt_size=1536)
-    tb.xdec_test(ad_size=0, pt_size=1535)
+    tb.xdec_test(ad_size=0, ct_size=1535)
 
     for i in full_sizes + list(range(1535, 1555)):
         tb.xhash_test(i)
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
-        tb.xdec_test(ad_size=ad_size, pt_size=pt_size)
+        tb.xdec_test(ad_size=ad_size, ct_size=pt_size)
         tb.xenc_test(ad_size=ad_size, pt_size=pt_size)
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
-        tb.xdec_test(ad_size=ad_size, pt_size=pt_size)
+        tb.xdec_test(ad_size=ad_size, ct_size=pt_size)
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
         tb.xenc_test(ad_size=ad_size, pt_size=pt_size)
@@ -143,22 +109,26 @@ async def test_timing(dut: SimHandleBase):
         debug = bool(debug)
     print(f'XOODYAK_DEBUG={debug}')
 
+    max_stalls = 0 # for timing measurements
+
     tb = XoodyakRefCheckerTb(
-        dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
+        dut, debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
 
     await tb.start()
+    block_size = 128 // 8
+    for sz in [16, 64, 1536, 4 * block_size, 5 * block_size]:
+        for op in ['enc', 'dec']:
+            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
+            print(f'{op} PT={sz} AD=0: {cycles}')
+            cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
+            print(f'{op} PT={sz} AD=0: {cycles}')
 
-    # tb.xhash_test(5 * 128 // 8)
-    tb.xenc_test(ad_size=0, pt_size=64)
+        cycles = await tb.measure_op(dict(op='hash', hm_size=sz))
+        print(f'hash HM={sz}: {cycles}')
+        
 
-    await tb.launch_monitors()
-    await tb.launch_drivers()
 
-    timeout=1000
-    await tb.join_drivers(timeout)
-    await tb.join_monitors(timeout)
-
-    # await Timer(2000)
+    # d1 = await measure_op(dict(op='dec', ad_size=0, ct_size=1536))
 
     await tb.clock_edge
 

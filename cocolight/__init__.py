@@ -2,8 +2,12 @@
 from logging import Logger
 from math import ceil
 from types import SimpleNamespace
-from typing import List
+from typing import List, Union
 import random
+from queue import Queue
+
+from cocotb.utils import get_sim_time
+from xoodyak.pyxoodyak.lwc_api import LwcAead, LwcHash
 
 import cocotb
 from cocotb.clock import Clock
@@ -12,6 +16,7 @@ from cocotb.handle import SimHandleBase
 from cocotb.triggers import (First, Join, ReadOnly, RisingEdge, Timer)
 
 from .hw_api import Instruction, Segment, SegmentType, OpCode, Status
+from .utils import rand_bytes
 
 def chunks(l, n):
     for i in range(0, len(l), n):
@@ -69,7 +74,7 @@ class ValidReadyDriver(ForkJoinBase):
         self.clock = clock
         self._debug = debug
         self.clock_edge = RisingEdge(clock)
-        self.queue: List[List[int]] = []
+        self.queue: Queue[List[int]] = Queue()
         self.max_stalls = max_stalls
         # dut._id(f"{sig_name}", extended=False) ?
         self._data_sig = getattr(self.dut, f'{self.name}_data')
@@ -78,7 +83,8 @@ class ValidReadyDriver(ForkJoinBase):
 
     async def run(self):
         signal_name = self._data_sig._name
-        for message in self.queue:
+        while not self.queue.empty():
+            message = self.queue.get()
             l = len(message)
             u = "word"
             if l > 1:
@@ -117,7 +123,7 @@ class ValidReadyMonitor(ForkJoinBase):
         self.failures = 0
         self.num_received_words = 0
         self._debug = debug
-        self.expected: List[List[int]] = []
+        self.queue: Queue[List[int]] = Queue()
         self.max_stalls = max_stalls
         self._ready.setimmediatevalue(0)
 
@@ -125,16 +131,15 @@ class ValidReadyMonitor(ForkJoinBase):
 
     async def run(self):
         width = len(self._data_signal)
-        # TODO check expected data in correct range for the width
-        show_messages(self.expected, width)
         digits = ceil(width / 4)
 
-        if not self.expected:
+        if self.queue.empty():
             self.log.error(f"Monitor {self.name} is not expecting any data!")
             raise TestError
 
         # await ReadOnly()
-        for message in self.expected:
+        while not self.queue.empty():
+            message = self.queue.get()
             self.log.debug(f"Expecting {len(message)} words on '{self.name}'")
             for exp in message:
                 # TODO add custom ready generator
@@ -273,7 +278,7 @@ class LwcTb(Tb):
 
             message.extend(segment.to_words(width))
 
-        sender.queue.append(message)
+        sender.queue.put(message)
 
     def expect_message(self, *segments: Segment, status=Status.Success):
         width = self.do.width
@@ -282,7 +287,7 @@ class LwcTb(Tb):
             exp_words = segment.to_words(width)
             message.extend(exp_words)
         message.extend(status.to_words(width))
-        self.do.expected.append(message)
+        self.do.queue.put(message)
 
     def encrypt_test(self, key, nonce, ad, pt, ct, tag):
         self.enqueue_message(Instruction(OpCode.ACTKEY))
@@ -316,3 +321,70 @@ class LwcTb(Tb):
                              )
         self.expect_message(
             *Segment.segmentize(SegmentType.DIGEST, digest, last=1, eot=1, eoi=0))
+
+
+
+class LwcRefCheckerTb(LwcTb):
+    def __init__(self, dut: SimHandleBase, ref: Union[LwcAead, LwcHash], debug, max_in_stalls, max_out_stalls) -> None:
+        super().__init__(dut, debug=debug, max_in_stalls=max_in_stalls,
+                         max_out_stalls=max_out_stalls)
+        self.debug = debug
+        
+        self.ref = ref
+        self.rand_inputs = not debug
+
+    def gen_inputs(self, numbytes):
+        s = 0 if numbytes > 1 else 1
+        return rand_bytes(numbytes) if self.rand_inputs else bytes([i % 255 for i in range(s, numbytes+s)])
+
+    def xenc_test(self, ad_size, pt_size):
+        key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
+        npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
+        ad = self.gen_inputs(ad_size)
+        pt = self.gen_inputs(pt_size)
+        tag, ct = self.ref.encrypt(pt, ad, npub, key)
+        if self.debug:
+            print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
+                  f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+        self.encrypt_test(key, npub, ad, pt, ct, tag)
+
+    def xdec_test(self, ad_size, ct_size):
+        key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
+        npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
+        ad = self.gen_inputs(ad_size)
+        pt = self.gen_inputs(ct_size)
+        tag, ct = self.ref.encrypt(pt, ad, npub, key)
+        if self.debug:
+            print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
+                  f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+        self.decrypt_test(key, npub, ad, pt, ct, tag)
+
+    def xhash_test(self, hm_size):
+        hm = self.gen_inputs(hm_size)
+        digest = self.ref.hash(hm)
+        self.hash_test(hm, digest=digest)
+
+    async def measure_op(self, op_dict: dict):
+        timeout=2**18
+        t0 = get_sim_time()
+        op = op_dict['op']
+        ad_size = op_dict.get('ad_size')
+        xt_size = op_dict.get('xt_size')
+        hm_size = op_dict.get('hm_size')
+        if op == 'enc':
+            assert ad_size is not None and xt_size is not None
+            self.xenc_test(ad_size=ad_size, pt_size=xt_size)
+        elif op == 'dec':
+            assert ad_size is not None and xt_size is not None
+            self.xdec_test(ad_size=ad_size, ct_size=xt_size)
+        elif op == 'hash':
+            assert hm_size is not None
+            self.xhash_test(hm_size=hm_size)
+        await self.launch_monitors()
+        await self.launch_drivers()
+        await self.join_drivers(timeout)
+        await self.join_monitors(timeout)
+        t1 = get_sim_time()
+        cycles = (t1 - t0) // self.clock_period
+        return cycles
+

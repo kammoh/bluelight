@@ -6,7 +6,6 @@
 # and the reference C implementation.
 
 import sys
-import random
 from enum import Enum, auto
 from typing import Any, Optional, Tuple
 import os
@@ -14,8 +13,6 @@ import inspect
 
 SCRIPT_DIR = os.path.realpath(os.path.dirname(
     inspect.getfile(inspect.currentframe())))
-
-cffi_build_dir = 'cffi_build'
 
 DEBUG_LEVEL = 1
 
