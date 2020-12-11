@@ -13,13 +13,9 @@ from cocotb.triggers import (First, Join, ReadOnly, RisingEdge, Timer)
 
 from .hw_api import Instruction, Segment, SegmentType, OpCode, Status
 
-IO_WIDTH = 32
-
-
 def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i+n]
-
 
 def show_messages(messages, width):
     num_messages = len(messages)
@@ -77,13 +73,17 @@ class ValidReadyDriver(ForkJoinBase):
         self.max_stalls = max_stalls
         # dut._id(f"{sig_name}", extended=False) ?
         self._data_sig = getattr(self.dut, f'{self.name}_data')
-        self._width_nibs = ceil(len(self._data_sig) / 4)
+        self.width = len(self._data_sig)
         self._valid.setimmediatevalue(0)
 
     async def run(self):
+        signal_name = self._data_sig._name
         for message in self.queue:
-            self.log.info(
-                f'Sending {len(message)} words on {self._data_sig._name}')
+            l = len(message)
+            u = "word"
+            if l > 1:
+                u += "s"
+            self.log.info(f'Putting {l} {u} on {signal_name}')
             for word in message:
                 r = random.randint(-self.max_stalls, self.max_stalls)
                 if r > 0:
@@ -112,7 +112,8 @@ class ValidReadyMonitor(ForkJoinBase):
         self.log = dut._log
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
-        self._data_sig = getattr(self.dut, f'{self.name}_data')
+        self._data_signal = getattr(self.dut, f'{self.name}_data')
+        self.width = len(self._data_signal)
         self.failures = 0
         self.num_received_words = 0
         self._debug = debug
@@ -123,7 +124,7 @@ class ValidReadyMonitor(ForkJoinBase):
     # TODO just single "data" field implemented
 
     async def run(self):
-        width = len(self._data_sig)
+        width = len(self._data_signal)
         # TODO check expected data in correct range for the width
         show_messages(self.expected, width)
         digits = ceil(width / 4)
@@ -149,7 +150,7 @@ class ValidReadyMonitor(ForkJoinBase):
                     await self.clock_edge  # TODO optimize by wait for valid = 1 if valid was != 0 ?
                     await ReadOnly()
 
-                received = self._data_sig.value
+                received = self._data_signal.value
                 self.num_received_words += 1
 
                 exp = f'{exp:0{digits}x}'
@@ -242,15 +243,13 @@ class LwcTb(Tb):
         super().__init__(dut=dut,
                          input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=0, max_out_stalls=0)
 
-        self.io_width = IO_WIDTH  # FIXME auto get and check from pdi sdi do
-
         self.pdi: ValidReadyDriver = self.drivers.pdi
         self.sdi: ValidReadyDriver = self.drivers.sdi
         self.do: ValidReadyMonitor = self.monitors.do
 
     def enqueue_message(self, instruction: Instruction, *segments: Segment):
-        width = self.io_width
         sender = self.sdi if instruction.op == OpCode.LDKEY else self.pdi
+        width = sender.width
 
         # self.log.debug(f'enqueuing instruction {instruction} on {sender.name}')
         message = instruction.to_words(width)
@@ -277,11 +276,12 @@ class LwcTb(Tb):
         sender.queue.append(message)
 
     def expect_message(self, *segments: Segment, status=Status.Success):
+        width = self.do.width
         message = []
         for segment in segments:
-            exp_words = segment.to_words(self.io_width)
+            exp_words = segment.to_words(width)
             message.extend(exp_words)
-        message.extend(status.to_words(self.io_width))
+        message.extend(status.to_words(width))
         self.do.expected.append(message)
 
     def encrypt_test(self, key, nonce, ad, pt, ct, tag):
