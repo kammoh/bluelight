@@ -350,7 +350,7 @@ class Xoodyak(LwcAead, LwcHash):
     CRYPTO_KEYBYTES = Cyclist.CRYPTO_KEYBYTES
     CRYPTO_NPUBBYTES = 16
     CRYPTO_HASH_BYTES = 32
-    CRYPTO_ABYTES = 16
+    CRYPTO_ABYTES = 16 # Tag
 
 
     def __init__(self, debug=False) -> None:

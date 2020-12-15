@@ -1,3 +1,4 @@
 00 InIdle
-01 InRecv
-10 InFill
+01 InBdi
+10 InZeroFill
+11 InFull

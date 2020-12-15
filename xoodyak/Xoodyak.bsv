@@ -9,15 +9,15 @@ import PISO::*;
 import CryptoCore::*;
 
 typedef enum {
-  InIdle, // waiting to receive command
-  InRecv, // recieve from bdi
-  InFill
+  InIdle, // waiting to process command
+  InBdi, // recieve from bdi
+  InZeroFill,
+  InFull
 } InputState deriving(Bits, Eq);
 
 typedef enum {
   Absorb,
-  Permute,
-  Squeeze
+  Permute
 } TransformState deriving(Bits, Eq);
 
 // (* synthesize *)
@@ -36,10 +36,10 @@ module mkXoodyak(CryptoCoreIfc);
   // Xoodoo
   Reg#(XoodooState) xoodooState <- mkRegU;
 
-  Reg#(UInt#(TLog#(NumRounds))) round_counter <- mkRegU;
+  Reg#(UInt#(TLog#(NumRounds))) roundCounter <- mkRegU;
 
-  Reg#(SegmentType) recv_type <- mkRegU;
-  Reg#(Bool) last_word_padded <- mkRegU;
+  Reg#(SegmentType) inRecvType <- mkRegU;
+  Reg#(Bool) lastWordPadded <- mkRegU;
 
   Reg#(UInt#(TLog#(7))) sipoValidLanes <- mkRegU;
 
@@ -49,13 +49,20 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(Bool) zfilled <- mkRegU;
   Reg#(Bool) inFirstBlock  <- mkRegU;
   Reg#(Bool) inLastBlock   <- mkRegU; // last block of the segment
-  Reg#(Bool) outLastBlock  <- mkReg(False);
+  Reg#(Bool) outLastBlock  <- mkReg(False); // used only for lot to enable padding of bdo word
   Reg#(Bool) fullAdBlock   <- mkRegU;
-  Reg#(Bool) firstSqueeze  <- mkRegU;
-  Reg#(Bool) secondSqueeze <- mkRegU;
+  Reg#(Bool) enFirstSqueeze  <- mkReg(False);
+  Reg#(Bool) enSecondSqueeze <- mkReg(False);
+
+  let squeeze = enFirstSqueeze || enSecondSqueeze;
+
+  let inRecvHM  = inRecvType == HM;
+  let inRecvKey = inRecvType == Key;
+  let inRecvAD = inRecvType == AD;
+  let inRecvHMorKey = inRecvHM || inRecvKey;
 
   function Byte udConst();
-    return case (recv_type)
+    return case (inRecvType)
       Key:  8'h2;
       Npub: 8'h3;
       AD: 
@@ -71,33 +78,11 @@ module mkXoodyak(CryptoCoreIfc);
     endcase;
   endfunction : udConst
 
+  // either absorb, absorb+squeeze or just squeeze
   (* fire_when_enabled *)
-  rule rl_absorb if (sipo.isFull && (inState != InIdle) && (xState == Absorb) && !piso.notEmpty);
-    sipo.deq;
+  rule rl_absorb_squeeze if (inState == InFull && xState == Absorb && !piso.notEmpty); // TODO decouple piso
     
-    // always permute after absorb
-    xState <= Permute;
-
-    round_counter <= 0;
-    inFirstBlock <= False;
-    zfilled      <= False;
-
-
-    if (inLastBlock && (recv_type == PT || recv_type == CT || recv_type == HM)) begin
-      outPadarg <= recv_type == HM ? 0 : inPadarg;
-      firstSqueeze <= True;
-      secondSqueeze <= recv_type == HM;
-    end else begin
-      outPadarg <= 0;
-      firstSqueeze  <= False;
-      secondSqueeze <= False;
-    end
-    inState <= inLastBlock ? InIdle : InRecv;
-    inLastBlock <= False;
-
-    
-    // $displayh("flags: ", sipoFlags.data);
-
+    // TODO move out
     /// update xoodooState: ////
     Vector#(12, XoodooLane) nextState;
     let currentState = concat(xoodooState);
@@ -113,77 +98,129 @@ module mkXoodyak(CryptoCoreIfc);
         4'b1111 : d;
         default : x;
       endcase;
-      nextState[i] = case (recv_type)
+      nextState[i] = case (inRecvType)
         Key, CT: lane; // replace flagged bytes
         HM : (inFirstBlock ? lane : x);
         default : x;
       endcase;
     end
-    XoodooLane lastLane = ((recv_type == Key) || ((recv_type == HM) && inFirstBlock)) ? 0 : last(currentState);
+    XoodooLane lastLane = (inRecvKey || (inRecvHM && inFirstBlock)) ? 0 : last(currentState);
     nextState[11] = {lastLane[31:24] ^ udConst, lastLane[23:1], lastLane[0] ^ pack(fullAdBlock)};
+    //END OF MOVE OUT
 
-    xoodooState <= toChunks(nextState);
+    fullAdBlock    <= False;
+    inFirstBlock   <= False;
+    inLastBlock    <= False;
+    zfilled        <= False;
+    lastWordPadded <= False;
+    
+    if (!squeeze) begin
+
+      outLastBlock <= inLastBlock; // bdo.lot to pad output
+
+      if (inLastBlock) begin
+        case (inRecvType)
+          PT, CT:
+            enFirstSqueeze  <= True;
+          HM: begin
+            enFirstSqueeze  <= True;
+            enSecondSqueeze <= True;
+            sipo.deq;
+            inState <= InZeroFill;
+          end
+          default: begin
+            sipo.deq;
+            inState <= InIdle;
+          end
+        endcase
+      end else begin
+        sipo.deq;
+        inState <= InBdi; // get more bdi
+      end
+    end else begin
+      enFirstSqueeze  <= False;
+      
+      if (!(enFirstSqueeze && enSecondSqueeze)) begin
+        sipo.deq;
+        inState <= InIdle;
+      end
+    end
+    
+    if (!enFirstSqueeze && enSecondSqueeze) enSecondSqueeze <= False;
+
+    if (enFirstSqueeze == enSecondSqueeze) // either ! squeeze of hash firstSqueeze
+      xoodooState <= toChunks(nextState);
+
+
     /////////////////////////////
 
-    /// send output on PT/CT
-    case (recv_type)
-      CT,PT: begin
-        piso.enq(take(inputXorState), sipoValidLanes);
-        outLastBlock <= inLastBlock;
-      end
-    endcase
-
-  endrule
-
-  (* fire_when_enabled *)
-  rule rl_squeeze if (xState == Squeeze);
-    piso.enq(take(concat(xoodooState)), fromInteger(crypto_abytes / 4) );
-    
-    if (secondSqueeze) begin // this was 1/2
-      xoodooState[0][0][0] <=  xoodooState[0][0][0] ^ 1;
-      xState <= Permute;
-    end else begin
-      outLastBlock  <= False;
-      xState <= Absorb;
+    /// send output
+    outPadarg <= squeeze ? 0 : inPadarg;
+    if (inRecvType == CT || inRecvType == PT || squeeze) begin
+        piso.enq(squeeze ? take(currentState) : take(inputXorState), squeeze ? 4 : sipoValidLanes);
     end
-    round_counter <= 0;
-
+        
+    // always permute after absorb/squeeze
+    roundCounter <= 0;
+    xState <= Permute;
   endrule
 
+  // (* fire_when_enabled *)
+  // rule rl_squeeze if (xState == Squeeze);
+  //   piso.enq(take(concat(xoodooState)), fromInteger(crypto_abytes / 4) );
+    
+  //   if (enSecondSqueeze) begin // this was 1/2
+  //     xoodooState[0][0][0] <=  xoodooState[0][0][0] ^ 1;
+  //     xState <= Permute;
+  //   end else begin
+  //     outLastBlock  <= False;
+  //     xState <= Absorb;
+  //   end
+  //   roundCounter <= 0;
+
+  // endrule
+
+  /// Permutation Rounds ///
   (* fire_when_enabled, no_implicit_conditions *)
   rule rl_permute if (xState == Permute);
-    xoodooState <= round(xoodooState, round_counter);
+    xoodooState <= round(xoodooState, roundCounter);
     
-    if (round_counter == fromInteger(valueOf(NumRounds) - 1) ) begin
-      if(firstSqueeze && secondSqueeze) begin
-        firstSqueeze  <= False;
-        xState <= Squeeze;
-      end else if (firstSqueeze || secondSqueeze) begin
-        secondSqueeze <= False;
-        xState <= Squeeze;
-      end else
-        xState <= Absorb;
-    end else
-      round_counter <= round_counter + 1;
+    if (roundCounter == fromInteger(valueOf(NumRounds) - 1) )
+      xState <= Absorb;
+    //   if(enFirstSqueeze && enSecondSqueeze) begin
+    //     enFirstSqueeze  <= False;
+    //     xState <= Squeeze;
+    //   end else if (enFirstSqueeze || enSecondSqueeze) begin
+    //     enSecondSqueeze <= False;
+    //     xState <= Squeeze;
+    //   end else
+    //     xState <= Absorb;
+    // end else
+      roundCounter <= roundCounter + 1;
   endrule
 
+  let sipoWillFill = sipo.count == 10;
+  // let sipoWillFill =  (sipo.count[3] == 1 && sipo.count[1] == 1) // 11 - 1
+
   (* fire_when_enabled *)
-  rule rl_fill_zero if (inState == InFill && !sipo.isFull);
+  rule rl_fill_zero if (inState == InZeroFill && !sipo.isFull);
     zfilled <= True;
     fullAdBlock <= False;
     if(!zfilled)
       sipoValidLanes <= truncate(sipo.count);
-
     
-    // replace key/1st HM, extend with zeros
-    let replace = (recv_type == Key) || ((recv_type == HM) && inFirstBlock);
+    // replace state with key or 1st HM block, extended with zeros
+    let replace = inRecvKey || (inRecvHM && inFirstBlock);
     sipoFlags.enq(replace ? 4'b1111 : 4'b0); 
-    if (!zfilled && !last_word_padded) begin
-      sipo.enq((recv_type == Key) ? 'h100 : 1);
+    if (!zfilled && !lastWordPadded) begin
+      sipo.enq(inRecvKey ? 'h100 : 1);
     end
     else begin
       sipo.enq(0);
     end
+
+    if (sipoWillFill)
+      inState <= InFull;
   endrule
 
   function Bit#(4) padargToFlag(Bool lot, Bit#(2) padarg);
@@ -196,43 +233,46 @@ module mkXoodyak(CryptoCoreIfc);
   endfunction
 
   // ******************************** Methods and subinterfaces ********************************
+  method Action process(SegmentType typ, Bool empty) if (inState == InIdle);
+    inRecvType     <=   typ;
+    inFirstBlock   <=  True;
+    inLastBlock    <= empty;
+    zfilled        <= False;
+    fullAdBlock    <= False;
+    lastWordPadded <= False;
 
-  // typ:     SegmentType
-  // empty:   input is empty
-  method Action receive(SegmentType typ, Bool empty) if (inState == InIdle);
-    recv_type        <=   typ;
-    inFirstBlock     <=  True;
-    inLastBlock      <= empty;
-    zfilled          <= False;
-    last_word_padded <= False;
-
-    inState <= empty ? InFill : InRecv;
+    inState <= empty ? InZeroFill : InBdi;
   endmethod
-
+  
   interface FifoIn bdi;
-    method Action enq(i) if ((inState == InRecv) && !sipo.isFull);
+    method Action enq(i) if ((inState == InBdi) && !sipo.isFull);
       match tagged BdIO {word: .word, lot: .lot, padarg: .padarg} = i;
       match {.padded, .pw} = padWord(word, padarg, True); 
       
       sipo.enq(lot ? pw : word);
-      sipoFlags.enq(recv_type == HM ? 4'b1111 : padargToFlag(lot, padarg));
+      sipoFlags.enq(inRecvHM ? 4'b1111 : padargToFlag(lot, padarg));
 
-      let will_be_full = sipo.count == fromInteger(
-          case(recv_type)
-            HM, Key:  4;
-            AD     : 11;
-            default:  6;
-          endcase - 1);
+      let lastWordOfBlock =
+          case(inRecvType)
+            // HM, Key: sipo.count[1:0] == 2'b11; // 4 - 1
+            HM, Key: (sipo.count == 3); // 4 - 1
+            // default: sipo.count[2] == 1 && sipo.count[0] == 1; // 6 - 1
+            default: (sipo.count == 5); // 6 - 1
+          endcase;
 
-      if (lot || will_be_full) begin
-        inState  <= InFill; // fill happens only if sipo not already full (i.e not AD full block)
-        inPadarg <= padarg;
-      end
-      
+      if (inRecvAD) begin
+        if (sipoWillFill) begin
+          inState <= InFull;
+          fullAdBlock <= !(lot && padded);
+          sipoValidLanes <= truncate(sipo.count);
+        end else if (lot)
+          inState  <= InZeroFill;
+      end else if (lot || lastWordOfBlock)
+          inState  <= InZeroFill; // fill happens only if sipo not already full (i.e not AD full block)
+
+      inPadarg <= padarg;
       inLastBlock <= lot;
-      fullAdBlock <= !(lot && padded) && will_be_full;
-      last_word_padded <= lot && padded;
-
+      lastWordPadded <= lot && padded;
     endmethod
   endinterface
 

@@ -49,30 +49,30 @@ if args.gtkwave:
         return None, int(v)
 
     translations = {
-        'Lwc::OutputState': tr_enum('bin', 'SendHeader', 'SendData', 'VerifyTag', 'SendStatus'),
-        'Lwc::InputState': tr_enum('bin', 'GetPdiInstruction', 'GetSdiInstruction', 'GetPdiHeader', 'GetSdiHeader', 'GetPdiData', 'GetTag', 'EnqTagHeader', 'GetSdiData'),
-        'Xoodyak::InputState': tr_enum('bin', 'InIdle', 'InRecv', 'InFill'),
-        'Xoodyak::TransformState': tr_enum('bin', 'Absorb', 'Permute', 'Squeeze'),
+        # 'Lwc::OutputState': tr_enum('bin', 'SendHeader', 'SendData', 'VerifyTag', 'SendStatus'),
+        # 'Lwc::InputState': tr_enum('bin', 'GetPdiInstruction', 'GetSdiInstruction', 'GetPdiHeader', 'GetSdiHeader', 'GetPdiData', 'GetTag', 'EnqTagHeader', 'GetSdiData'),
+        # 'Xoodyak::InputState': tr_enum('bin', 'InIdle', 'InRecv', 'InFill'),
+        # 'Xoodyak::TransformState': tr_enum('bin', 'Absorb', 'Permute', 'Squeeze'),
     }
 
-    for pkg in ['CryptoCore', 'LwcApi']:
+    for pkg in ['CryptoCore', 'LwcApi', 'Xoodyak']:
         with open(f'{pkg}.bsv') as f:
             c = f.read()
 
             for td in typedef_enum_re.finditer(c):
                 td_body = td.group(1)
+                td_body = ' '.join([x.split('//')[0].strip() for x in td_body.split('\n')] )
                 td_name = td.group(2)
                 kvs = [re.split('\s*=\s*', x.strip())
                        for x in td_body.split(',')]
                 kvs = [(x[0], x[1]) if len(x) == 2 else (x[0], i)
                        for i, x in enumerate(kvs)]
-                # print(kvs)
                 kvs = {k: val_to_int(v) for k, v in kvs}
                 values = [v[0] for v in kvs.values()]
                 sz = max(values)
-                # print(f'sz={sz} values={values}')
                 if not sz:
-                    sz = log2(len(kvs))
+                    print(len(kvs))
+                    sz = ceil(log2(len(kvs)+1))
                     print(f'>>> sz={sz}')
                 fmt = 'hex' if sz >= 4 else 'bin'
                 translations[pkg + '::' +

@@ -116,7 +116,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     inSegLast        <= True;
     inSegEoT         <= True;
 
-    cryptoCore.receive(headerType(hdr), len == 0);
+    cryptoCore.process(headerType(hdr), len == 0);
     inState <= GetSdiData;
   endrule
 
@@ -148,7 +148,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     endcase
 
     let empty = len == 0;
-    cryptoCore.receive(typ, empty);
+    cryptoCore.process(typ, empty);
     
     if (empty)
     begin
@@ -272,7 +272,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     // $display("Verifytag got tag:%h core:%h", intag, sw);
 
     if (intag != sw) begin
-      $displayh("Tag mismatch: %h != %h ", intag, sw);
+      // $displayh("Tag mismatch: %h != %h ", intag, sw);
       statFailure <= True;
     end
     

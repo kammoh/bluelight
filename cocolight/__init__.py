@@ -246,7 +246,7 @@ class LwcTb(Tb):
     def __init__(self, dut: SimHandleBase, debug=False, max_in_stalls=0, max_out_stalls=0) -> None:
 
         super().__init__(dut=dut,
-                         input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=0, max_out_stalls=0)
+                         input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=max_in_stalls, max_out_stalls=max_out_stalls)
 
         self.pdi: ValidReadyDriver = self.drivers.pdi
         self.sdi: ValidReadyDriver = self.drivers.sdi
@@ -289,7 +289,7 @@ class LwcTb(Tb):
         message.extend(status.to_words(width))
         self.do.queue.put(message)
 
-    def encrypt_test(self, key, nonce, ad, pt, ct, tag):
+    async def encrypt_test(self, key, nonce, ad, pt, ct, tag):
         self.enqueue_message(Instruction(OpCode.ACTKEY))
         self.enqueue_message(Instruction(OpCode.LDKEY),
                              *Segment.segmentize(SegmentType.KEY, key))
@@ -303,7 +303,7 @@ class LwcTb(Tb):
             *Segment.segmentize(SegmentType.TAG, tag, last=1, eot=1, eoi=0)
         )
 
-    def decrypt_test(self, key, nonce, ad, pt, ct, tag):
+    async def decrypt_test(self, key, nonce, ad, pt, ct, tag):
         self.enqueue_message(Instruction(OpCode.ACTKEY))
         self.enqueue_message(Instruction(OpCode.LDKEY),
                              *Segment.segmentize(SegmentType.KEY, key))
@@ -315,7 +315,7 @@ class LwcTb(Tb):
                              )
         self.expect_message(Segment(SegmentType.PT, pt, last=1, eot=1, eoi=0))
 
-    def hash_test(self, hm, digest):
+    async def hash_test(self, hm, digest):
         self.enqueue_message(Instruction(OpCode.HASH),
                              *Segment.segmentize(SegmentType.HM, hm)
                              )
@@ -337,7 +337,7 @@ class LwcRefCheckerTb(LwcTb):
         s = 0 if numbytes > 1 else 1
         return rand_bytes(numbytes) if self.rand_inputs else bytes([i % 255 for i in range(s, numbytes+s)])
 
-    def xenc_test(self, ad_size, pt_size):
+    async def xenc_test(self, ad_size, pt_size):
         key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
         npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
         ad = self.gen_inputs(ad_size)
@@ -346,9 +346,9 @@ class LwcRefCheckerTb(LwcTb):
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
                   f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
-        self.encrypt_test(key, npub, ad, pt, ct, tag)
+        await self.encrypt_test(key, npub, ad, pt, ct, tag)
 
-    def xdec_test(self, ad_size, ct_size):
+    async def xdec_test(self, ad_size, ct_size):
         key = self.gen_inputs(self.ref.CRYPTO_KEYBYTES)
         npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
         ad = self.gen_inputs(ad_size)
@@ -357,15 +357,14 @@ class LwcRefCheckerTb(LwcTb):
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
                   f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
-        self.decrypt_test(key, npub, ad, pt, ct, tag)
+        await self.decrypt_test(key, npub, ad, pt, ct, tag)
 
-    def xhash_test(self, hm_size):
+    async def xhash_test(self, hm_size):
         hm = self.gen_inputs(hm_size)
         digest = self.ref.hash(hm)
-        self.hash_test(hm, digest=digest)
+        await self.hash_test(hm, digest=digest)
 
-    async def measure_op(self, op_dict: dict):
-        timeout=2**18
+    async def measure_op(self, op_dict: dict, timeout=None):
         t0 = get_sim_time()
         op = op_dict['op']
         ad_size = op_dict.get('ad_size')
@@ -373,13 +372,13 @@ class LwcRefCheckerTb(LwcTb):
         hm_size = op_dict.get('hm_size')
         if op == 'enc':
             assert ad_size is not None and xt_size is not None
-            self.xenc_test(ad_size=ad_size, pt_size=xt_size)
+            await self.xenc_test(ad_size=ad_size, pt_size=xt_size)
         elif op == 'dec':
             assert ad_size is not None and xt_size is not None
-            self.xdec_test(ad_size=ad_size, ct_size=xt_size)
+            await self.xdec_test(ad_size=ad_size, ct_size=xt_size)
         elif op == 'hash':
             assert hm_size is not None
-            self.xhash_test(hm_size=hm_size)
+            await self.xhash_test(hm_size=hm_size)
         await self.launch_monitors()
         await self.launch_drivers()
         await self.join_drivers(timeout)

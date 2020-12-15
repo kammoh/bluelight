@@ -74,7 +74,9 @@ typedef struct {
 
 interface CryptoCoreIfc;
   // after fire, words of type `typ` will be sent to CryptoCore, if not empty
-  method Action receive(SegmentType typ, Bool empty);
+  // typ:   type of segment to be received (if note empty) and processed
+  // empty: no bdi will be sent afterwards
+  method Action process(SegmentType typ, Bool empty);
   
   // input to CryptoCore
   interface FifoIn#(BdIO)  bdi;
