@@ -69,8 +69,6 @@ async def blanket_test1(dut: SimHandleBase):
     await tb.join_drivers()
     await tb.join_monitors()
 
-    await tb.clock_edge
-
 @cocotb.test()
 async def blanket_test2(dut: SimHandleBase):
 
@@ -114,8 +112,6 @@ async def blanket_test2(dut: SimHandleBase):
 
     await tb.join_drivers()
     await tb.join_monitors()
-
-    await tb.clock_edge
 
 
 @cocotb.test()

@@ -46,6 +46,8 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(Bit#(2)) inPadarg  <- mkRegU;
   Reg#(Bit#(2)) outPadarg <- mkRegU;
 
+  Reg#(Bit#(4)) udConstReg <- mkRegU;
+
   Reg#(Bool) zfilled <- mkRegU;
   Reg#(Bool) inFirstBlock  <- mkRegU;
   Reg#(Bool) inLastBlock   <- mkRegU; // last block of the segment
@@ -61,27 +63,28 @@ module mkXoodyak(CryptoCoreIfc);
   let inRecvAD = inRecvType == AD;
   let inRecvHMorKey = inRecvHM || inRecvKey;
 
-  function Byte udConst();
-    return case (inRecvType)
-      Key:  8'h2;
-      Npub: 8'h3;
+  // only 4 bits of the constants are used, others are zero
+  function Bit#(4) udConstBits(Bool firstBlock, Bool lastBlock, SegmentType recvType);
+    return case (recvType)
+      Key:  4'h2;
+      Npub: 4'h3;
       AD: 
-        case (tuple2(inFirstBlock,inLastBlock)) matches
-          {True,  True}: 8'h83;
-          {False, True}: 8'h80;
-          {True, False}: 8'h03;
-          default:       8'h00;
+        case (tuple2(firstBlock,lastBlock)) matches
+          {True,  True}: 4'hb;
+          {False, True}: 4'h8;
+          {True, False}: 4'h3;
+          default:       4'h0;
         endcase
-      PT, CT: (inLastBlock ? 8'h40 : 0);
-      HM: (inFirstBlock ? 8'h01 : 8'h00);
-      default: 8'h00;
+      PT, CT: (lastBlock ? 4'h4 : 0);
+      HM: (firstBlock ? 4'h1 : 0);
+      default: 0;
     endcase;
-  endfunction : udConst
+  endfunction : udConstBits
 
   // either absorb, absorb+squeeze or just squeeze
   (* fire_when_enabled *)
   rule rl_absorb_squeeze if (inState == InFull && xState == Absorb && !piso.notEmpty); // TODO decouple piso
-    
+    udConstReg <= 0; // 0 if squeeze
     // TODO move out
     /// update xoodooState: ////
     Vector#(12, XoodooLane) nextState;
@@ -105,7 +108,7 @@ module mkXoodyak(CryptoCoreIfc);
       endcase;
     end
     XoodooLane lastLane = (inRecvKey || (inRecvHM && inFirstBlock)) ? 0 : last(currentState);
-    nextState[11] = {lastLane[31:24] ^ udConst, lastLane[23:1], lastLane[0] ^ pack(fullAdBlock)};
+    nextState[11] = {lastLane[31:24] ^ {udConstReg[3:2], 4'b0, udConstReg[1:0]} , lastLane[23:1], lastLane[0] ^ pack(fullAdBlock)};
     //END OF MOVE OUT
 
     fullAdBlock    <= False;
@@ -165,38 +168,13 @@ module mkXoodyak(CryptoCoreIfc);
     xState <= Permute;
   endrule
 
-  // (* fire_when_enabled *)
-  // rule rl_squeeze if (xState == Squeeze);
-  //   piso.enq(take(concat(xoodooState)), fromInteger(crypto_abytes / 4) );
-    
-  //   if (enSecondSqueeze) begin // this was 1/2
-  //     xoodooState[0][0][0] <=  xoodooState[0][0][0] ^ 1;
-  //     xState <= Permute;
-  //   end else begin
-  //     outLastBlock  <= False;
-  //     xState <= Absorb;
-  //   end
-  //   roundCounter <= 0;
-
-  // endrule
-
   /// Permutation Rounds ///
   (* fire_when_enabled, no_implicit_conditions *)
   rule rl_permute if (xState == Permute);
-    xoodooState <= round(xoodooState, roundCounter);
-    
-    if (roundCounter == fromInteger(valueOf(NumRounds) - 1) )
+    if (roundCounter == fromInteger(valueOf(NumRounds) - 1))
       xState <= Absorb;
-    //   if(enFirstSqueeze && enSecondSqueeze) begin
-    //     enFirstSqueeze  <= False;
-    //     xState <= Squeeze;
-    //   end else if (enFirstSqueeze || enSecondSqueeze) begin
-    //     enSecondSqueeze <= False;
-    //     xState <= Squeeze;
-    //   end else
-    //     xState <= Absorb;
-    // end else
-      roundCounter <= roundCounter + 1;
+    xoodooState <= round(xoodooState, roundCounter);
+    roundCounter <= roundCounter + 1;
   endrule
 
   let sipoWillFill = sipo.count == 10;
@@ -240,7 +218,7 @@ module mkXoodyak(CryptoCoreIfc);
     zfilled        <= False;
     fullAdBlock    <= False;
     lastWordPadded <= False;
-
+    udConstReg <= udConstBits(True, empty, typ);
     inState <= empty ? InZeroFill : InBdi;
   endmethod
   
@@ -273,6 +251,8 @@ module mkXoodyak(CryptoCoreIfc);
       inPadarg <= padarg;
       inLastBlock <= lot;
       lastWordPadded <= lot && padded;
+
+      udConstReg <= udConstBits(inFirstBlock, lot, inRecvType);
     endmethod
   endinterface
 

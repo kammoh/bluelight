@@ -89,7 +89,7 @@ class ValidReadyDriver(ForkJoinBase):
             u = "word"
             if l > 1:
                 u += "s"
-            self.log.info(f'Putting {l} {u} on {signal_name}')
+            self.log.debug(f'Putting {l} {u} on {signal_name}')
             for word in message:
                 r = random.randint(-self.max_stalls, self.max_stalls)
                 if r > 0:
