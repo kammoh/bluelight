@@ -388,5 +388,5 @@ class LwcRefCheckerTb(LwcTb):
         await self.join_monitors(timeout)
         t1 = get_sim_time()
         cycles = (t1 - t0) // self.clock_period
-        return cycles
+        return cycles - 1 # consistent with VHDL TB
 

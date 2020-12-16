@@ -3,8 +3,10 @@ import sys
 import os
 import inspect
 import itertools
-
 from cocotb.handle import SimHandleBase
+from functools import partial
+from pprint import pprint
+pprint = partial(pprint, sort_dicts=False)
 
 
 script_dir = os.path.realpath(os.path.dirname(
@@ -195,7 +197,7 @@ async def debug_hash(dut: SimHandleBase):
 
 
 @cocotb.test()
-async def test_timing(dut: SimHandleBase):
+async def measure_timings(dut: SimHandleBase):
 
     debug = os.environ.get('XOODYAK_DEBUG', False)
     # debug = True
@@ -213,28 +215,49 @@ async def test_timing(dut: SimHandleBase):
 
     await tb.start()
 
-    # PT/CT
-    block_size = 128 // 8
-    sizes = [16, 64, 1536, 4 * block_size, 5 * block_size]
-    for op in ['enc', 'dec']:
-        for sz in sizes:
-            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
-            print(f'{op} PT={sz} AD=0: {cycles}')
+    all_results = {}
+    block_sizes = {'AD': 352 // 8, 'PT/CT': 192 // 8, 'HM':  128 // 8}
 
-    # AD
-    block_size = 192 // 8
-    sizes = [16, 64, 1536, 4 * block_size, 5 * block_size]    
     for op in ['enc', 'dec']:
+        results = {}
+        bt = 'AD'
+        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]    
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
-            print(f'{op} PT=0 AD={sz}: {cycles}')
+            # print(f'{op} PT=0 AD={sz}: {cycles}')
+            results[f'{bt} {sz}'] = cycles
 
-    block_size = 128 // 8
-    sizes = [16, 64, 1536, 4 * block_size, 5 * block_size]
+        bt = 'PT/CT'
+        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
+        for sz in sizes:
+            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
+            # print(f'{op} PT={sz} AD=0: {cycles}')
+            results[f'{bt} {sz}'] = cycles
 
+        bt = 'AD+PT/CT'
+        sizes = [16, 64, 1536]
+        for sz in sizes:
+            cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=sz))
+            # print(f'{op} PT={sz} AD=0: {cycles}')
+            results[f'{bt} {sz}'] = cycles
+        for x in [4,5]:
+            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes['AD'], xt_size=x*block_sizes['PT/CT']))
+            # print(f'{op} PT={sz} AD=0: {cycles}')
+            results[f'{bt} {x}BS'] = cycles
+
+        all_results[op] = results
+
+    bt = 'HM'
+    sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
+    results = {}
     for sz in sizes:
         cycles = await tb.measure_op(dict(op='hash', hm_size=sz))
-        print(f'hash HM={sz}: {cycles}')
+        # print(f'hash HM={sz}: {cycles}')
+        results[f'{bt} {sz}'] = cycles
+
+    all_results['hash'] = results
+
+    pprint(all_results)
 
 
 if __name__ == "__main__":
