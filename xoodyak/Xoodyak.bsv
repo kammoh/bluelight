@@ -180,8 +180,8 @@ module mkXoodyak(CryptoCoreIfc);
     roundCounter <= roundCounter + 1;
   endrule
 
-  let sipoWillFill = sipo.count == 10;
-  // let sipoWillFill =  (sipo.count[3] == 1 && sipo.count[1] == 1) // 11 - 1
+  // let sipoWillFill = sipo.count == 10;
+  let sipoWillFill =  (sipo.count[3] == 1 && sipo.count[1] == 1) // 11 - 1
 
   (* fire_when_enabled *)
   rule rl_fill_zero if (inState == InZeroFill && !sipo.isFull);
@@ -238,7 +238,7 @@ module mkXoodyak(CryptoCoreIfc);
 
       let lastWordOfBlock =
           case(inRecvType)
-            HM, Key: (pack(sipo.count)[1:0] == 2'b11); // 4 - 1
+            HM, Key: (pack(sipo.count)[1:0] == 3); // 4 - 1
             // HM, Key: (sipo.count == 3); // 4 - 1
             default: (pack(sipo.count)[2] == 1 && pack(sipo.count)[0] == 1); // 6 - 1
             // default: (sipo.count == 5); // 6 - 1
