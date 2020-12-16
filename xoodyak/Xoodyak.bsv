@@ -238,10 +238,10 @@ module mkXoodyak(CryptoCoreIfc);
 
       let lastWordOfBlock =
           case(inRecvType)
-            // HM, Key: sipo.count[1:0] == 2'b11; // 4 - 1
-            HM, Key: (sipo.count == 3); // 4 - 1
-            // default: sipo.count[2] == 1 && sipo.count[0] == 1; // 6 - 1
-            default: (sipo.count == 5); // 6 - 1
+            HM, Key: (pack(sipo.count)[1:0] == 2'b11); // 4 - 1
+            // HM, Key: (sipo.count == 3); // 4 - 1
+            default: (pack(sipo.count)[2] == 1 && pack(sipo.count)[0] == 1); // 6 - 1
+            // default: (sipo.count == 5); // 6 - 1
           endcase;
 
       if (inRecvAD) begin

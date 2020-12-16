@@ -1,3 +1,4 @@
+import random
 from random import randint
 import sys
 import os
@@ -11,6 +12,10 @@ pprint = partial(pprint, sort_dicts=False)
 
 script_dir = os.path.realpath(os.path.dirname(
     inspect.getfile(inspect.currentframe())))
+
+seed = random.randrange(sys.maxsize)
+random = random.Random(seed)
+print("Python random seed is:", seed)
 
 try:
     from .pyxoodyak import Xoodyak
@@ -65,6 +70,11 @@ async def blanket_test1(dut: SimHandleBase):
         await tb.xenc_test(ad_size=ad_size, pt_size=pt_size)
 
 
+    await tb.xdec_test(ad_size=1536, ct_size=0)
+    await tb.xenc_test(ad_size=1536, pt_size=0)
+    await tb.xenc_test(ad_size=0, pt_size=1536)
+    await tb.xdec_test(ad_size=0, ct_size=1535)
+
     await tb.launch_monitors()
     await tb.launch_drivers()
 
@@ -87,24 +97,25 @@ async def blanket_test2(dut: SimHandleBase):
         dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
 
 
-    sizes = [0, 1, 15, 16, 43, 61, 64, 179, 1536] + [randint(2,180) for _ in range (20)]
+    sizes = [0, 1, 15, 16, 43, 61, 64, 179, 1536] + [randint(2,230) for _ in range (30)]
+
+    sizes = list(set(sizes))
+    random.shuffle(sizes)
 
     await tb.start()
-
-    await tb.xdec_test(ad_size=1536, ct_size=0)
-    await tb.xenc_test(ad_size=1536, pt_size=0)
-    await tb.xenc_test(ad_size=0, pt_size=1536)
-    await tb.xdec_test(ad_size=0, ct_size=1535)
 
 
 
     for size1, size2 in itertools.product(sizes, sizes):
         op = randint(0, 2)
         if (op == 0):
+            # print("testing Encrypt")
             await tb.xenc_test(ad_size=size1, pt_size=size2)
         elif (op == 1):
+            # print("testing Decrypt")
             await tb.xdec_test(ad_size=size1, ct_size=size2)
         else:
+            # print("testing Hash x2")
             await tb.xhash_test(hm_size=size1)
             await tb.xhash_test(hm_size=size1 + size2)
 

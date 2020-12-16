@@ -11,12 +11,13 @@ typedef 3 NumPlanes;
 typedef TMul #(NumLanesInPlane, NumPlanes) NumLanesInState;
 Integer numLanesInState = valueOf(NumLanesInState);
 
-// 1: unrolled, 2: unrolled 2x  //// FIXME optimize for 2
-typedef 1 UnrollFactor;
-
 typedef 12 XoodyakRounds;
 
-typedef TDiv#(XoodyakRounds, UnrollFactor) NumRounds;
+`ifdef UNROLL
+typedef TDiv#(XoodyakRounds,2) NumRounds;
+`else
+typedef XoodyakRounds NumRounds;
+`endif
 
 typedef 44 Xoodyak_Rkin;
 typedef 24 Xoodyak_Rkout;
@@ -64,8 +65,8 @@ function XoodooState rho_west(XoodooState state);
   return state;
 endfunction
 
-function XoodooState iota(XoodooState a, UInt#(TLog#(XoodyakRounds)) r);
-  a[0][0][9:0] = unpack(pack(a[0][0])[9:0] ^ roundConst[r]);
+function XoodooState iota(XoodooState a, Bit#(10) rconst);
+  a[0][0][9:0] = unpack(pack(a[0][0])[9:0] ^ rconst);
   return a;
 endfunction
 
@@ -82,19 +83,18 @@ function XoodooState rho_east(XoodooState state);
 endfunction
 
 // Full single Xoodoo round
-function XoodooState singleRound(XoodooState state, UInt#(TLog#(XoodyakRounds)) r);
-  return rho_east(chi(iota(rho_west(theta(state)), r)));
+function XoodooState singleRound(XoodooState state, Bit#(10) rconst);
+  return rho_east(chi(iota(rho_west(theta(state)), rconst)));
 endfunction
 
-// Full Xoodoo round, possibly unrolled UnrollFactor times
-function XoodooState round(XoodooState prev_state, UInt#(TLog#(NumRounds)) r) provisos(Mul#(UnrollFactor, _n, XoodyakRounds) );
-  XoodooState next_state;
-  next_state = prev_state;
-  UInt#(TLog#(XoodyakRounds)) r_step = fromInteger(valueOf(UnrollFactor)) * zeroExtend(r);
-  Integer i;
-  for (i=0; i < valueOf(UnrollFactor); i = i + 1)
-    next_state = singleRound(next_state, r_step + fromInteger(i));
-  return next_state;
+function XoodooState round(XoodooState prev_state, UInt#(TLog#(NumRounds)) r);
+`ifdef UNROLL
+  Vector#(12, Bit#(10)) v = arrayToVector(roundConst);
+  Vector#(6, Vector#(2, Bit#(10))) consts = toChunks(v);
+  return singleRound(singleRound(prev_state, consts[r][0]), consts[r][1]);
+`else
+  return singleRound(prev_state, roundConst[r]);
+`endif
 endfunction
 
 endpackage : XoodooDefs
