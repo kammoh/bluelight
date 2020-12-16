@@ -133,6 +133,8 @@ class ValidReadyMonitor(ForkJoinBase):
         width = len(self._data_signal)
         digits = ceil(width / 4)
 
+        num_verified_messages = 0
+
         if self.queue.empty():
             self.log.error(f"Monitor {self.name} is not expecting any data!")
             raise TestError
@@ -140,7 +142,8 @@ class ValidReadyMonitor(ForkJoinBase):
         # await ReadOnly()
         while not self.queue.empty():
             message = self.queue.get()
-            self.log.debug(f"Expecting {len(message)} words on '{self.name}'")
+            num_verified_messages += 1
+            self.log.info(f"Verifying message #{num_verified_messages} ({len(message)} words) on '{self.name}'")
             for exp in message:
                 # TODO add custom ready generator
                 r = random.randint(-self.max_stalls, self.max_stalls)

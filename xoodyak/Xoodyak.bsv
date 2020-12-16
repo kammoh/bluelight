@@ -56,6 +56,10 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(Bool) enFirstSqueeze  <- mkReg(False);
   Reg#(Bool) enSecondSqueeze <- mkReg(False);
 
+  // optimization:
+  Reg#(Bool) replaceAllLanes <- mkRegU;
+  Reg#(Bool) replaceLowerLanes <- mkRegU;
+
   let squeeze = enFirstSqueeze || enSecondSqueeze;
 
   let inRecvHM  = inRecvType == HM;
@@ -101,13 +105,9 @@ module mkXoodyak(CryptoCoreIfc);
         4'b1111 : d;
         default : x;
       endcase;
-      nextState[i] = case (inRecvType)
-        Key, CT: lane; // replace flagged bytes
-        HM : (inFirstBlock ? lane : x);
-        default : x;
-      endcase;
+      nextState[i] = replaceLowerLanes ? lane : x;
     end
-    XoodooLane lastLane = (inRecvKey || (inRecvHM && inFirstBlock)) ? 0 : last(currentState);
+    XoodooLane lastLane = replaceAllLanes ? 0 : last(currentState);
     nextState[11] = {lastLane[31:24] ^ {udConstReg[3:2], 4'b0, udConstReg[1:0]} , lastLane[23:1], lastLane[0] ^ pack(fullAdBlock)};
     //END OF MOVE OUT
 
@@ -116,6 +116,9 @@ module mkXoodyak(CryptoCoreIfc);
     inLastBlock    <= False;
     zfilled        <= False;
     lastWordPadded <= False;
+    replaceAllLanes <= False;
+    if (inRecvHM)
+      replaceLowerLanes <= False;
     
     if (!squeeze) begin
 
@@ -151,7 +154,7 @@ module mkXoodyak(CryptoCoreIfc);
     
     if (!enFirstSqueeze && enSecondSqueeze) enSecondSqueeze <= False;
 
-    if (enFirstSqueeze == enSecondSqueeze) // either ! squeeze of hash firstSqueeze
+    if (enFirstSqueeze == enSecondSqueeze) // either !squeeze or hash:firstSqueeze
       xoodooState <= toChunks(nextState);
 
 
@@ -188,8 +191,7 @@ module mkXoodyak(CryptoCoreIfc);
       sipoValidLanes <= truncate(sipo.count);
     
     // replace state with key or 1st HM block, extended with zeros
-    let replace = inRecvKey || (inRecvHM && inFirstBlock);
-    sipoFlags.enq(replace ? 4'b1111 : 4'b0); 
+    sipoFlags.enq(replaceAllLanes ? 4'b1111 : 4'b0); 
     if (!zfilled && !lastWordPadded) begin
       sipo.enq(inRecvKey ? 'h100 : 1);
     end
@@ -220,6 +222,10 @@ module mkXoodyak(CryptoCoreIfc);
     lastWordPadded <= False;
     udConstReg <= udConstBits(True, empty, typ);
     inState <= empty ? InZeroFill : InBdi;
+
+    replaceAllLanes <= typ == Key || typ == HM;
+    replaceLowerLanes <= typ == Key || typ == HM || typ == CT;
+      
   endmethod
   
   interface FifoIn bdi;

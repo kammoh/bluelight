@@ -132,7 +132,10 @@ async def debug_enc(dut: SimHandleBase):
 
     await tb.start()
 
-    await tb.xenc_test(ad_size=0, pt_size=64)
+    await tb.xenc_test(ad_size=63, pt_size=0)
+    await tb.xenc_test(ad_size=0, pt_size=63)
+    await tb.xenc_test(ad_size=44, pt_size=32)
+    await tb.xenc_test(ad_size=65, pt_size=65)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
@@ -141,7 +144,7 @@ async def debug_enc(dut: SimHandleBase):
     await tb.join_monitors(10000)
 
 @cocotb.test()
-async def debug_enc(dut: SimHandleBase):
+async def debug_dec(dut: SimHandleBase):
 
     # debug = os.environ.get('XOODYAK_DEBUG', False)
     debug = True
@@ -159,6 +162,9 @@ async def debug_enc(dut: SimHandleBase):
     await tb.start()
 
     await tb.xdec_test(ad_size=45, ct_size=0)
+    await tb.xdec_test(ad_size=44, ct_size=0)
+    await tb.xdec_test(ad_size=0, ct_size=45)
+    await tb.xdec_test(ad_size=65, ct_size=65)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
@@ -176,7 +182,10 @@ async def debug_hash(dut: SimHandleBase):
 
     await tb.start()
 
-    await tb.xhash_test(15)
+    # await tb.xhash_test(15)
+    # await tb.xhash_test(16)
+    await tb.xhash_test(32)
+    # await tb.xhash_test(99)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
