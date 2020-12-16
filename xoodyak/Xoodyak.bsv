@@ -181,7 +181,7 @@ module mkXoodyak(CryptoCoreIfc);
   endrule
 
   // let sipoWillFill = sipo.count == 10;
-  let sipoWillFill =  (sipo.count[3] == 1 && sipo.count[1] == 1) // 11 - 1
+  let sipoWillFill =  (pack(sipo.count)[3] == 1 && pack(sipo.count)[1] == 1); // 11 - 1
 
   (* fire_when_enabled *)
   rule rl_fill_zero if (inState == InZeroFill && !sipo.isFull);
