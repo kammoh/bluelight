@@ -221,7 +221,8 @@ module mkXoodyak(CryptoCoreIfc);
     zfilled        <= False;
     fullAdBlock    <= False;
     lastWordPadded <= False;
-    udConstReg <= udConstBits(True, empty, typ);
+    sipoCount      <= 0;
+    udConstReg     <= udConstBits(True, empty, typ);
     inState <= empty ? InZeroFill : InBdi;
 
     replaceAllLanes   <= typ == Key || typ == HashMessage;

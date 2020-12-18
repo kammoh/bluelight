@@ -162,7 +162,8 @@ def bsc_generate_verilog():
     designs = xp['design']
     if not isinstance(designs, list):
         designs = [designs]
-    xeda_design = next(filter(lambda d: d['name'] == args.design, designs), None)
+    xeda_design = next(
+        filter(lambda d: d['name'] == args.design, designs), None)
     rtl_settings = xeda_design['rtl']
     bsv_sources = [f for f in rtl_settings['sources'] if f.endswith('.bsv')]
     top_file = bsv_sources[-1]
@@ -237,7 +238,10 @@ def run_sim(top):
     extra_args = [
         # '+define+BSV_POSITIVE_RESET=1',
         # + [f'-I{p}' for p in verilog_paths],
-        '-Wno-STMTDLY', '-Wno-INITIALDLY'
+        '-Wno-STMTDLY', '-Wno-INITIALDLY',
+        '--x-assign', 'unique',
+        '--x-initial', 'unique',  # perf: fast
+        '-O3',
     ]
 
     if args.debug:
@@ -247,14 +251,13 @@ def run_sim(top):
             '--trace-max-array', '64',
             '--trace-underscore',
             '--trace-max-width', '512',
-            '--x-assign', 'unique',
-            '--x-initial', 'unique',  # perf: fast
+
         ]
     else:
         extra_args += [
             '-O3',
             # '--x-initial', 'unique',  # perf: fast, don't change
-            '--x-assign', 'fast',  # perf: fast
+            # '--x-assign', 'fast',  # perf: fast
         ]
 
     cocotb_env = dict(COCOTB_REDUCED_LOG_FMT='1',
@@ -285,6 +288,8 @@ def run_sim(top):
 
     sim = Verilator(extra_args=extra_args,
                     extra_env=cocotb_env,
+                    plus_args=[
+                        '+verilator+seed+50', '+verilator+rand+reset+2'],
                     verilog_sources=verilog_sources,
                     toplevel=top,
                     module="xoodyakTb"
