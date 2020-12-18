@@ -1,14 +1,16 @@
-package Xoodyak;
+package Xoodyak2x;
 
 import Vector::*;
 import GetPut::*;
+import Probe::*;
 
 import XoodooDefs::*;
 import SIPO::*;
 import PISO::*;
 import CryptoCore::*;
 
-typedef XoodyakRounds NumRounds;
+// unrolled by 2x
+typedef TDiv#(XoodyakRounds,2) NumRounds;
 
 typedef enum {
   InIdle, // waiting on process command
@@ -24,12 +26,14 @@ typedef enum {
 
 // (* synthesize *)
 module mkXoodyak(CryptoCoreIfc);
-  SIPO#(MaxInRateLanes, XoodooLane)  sipo <- mkSIPO;
-  PISO#(MaxOutRateLanes, XoodooLane) piso <- mkPISO;
-
+  MyShiftReg#(6, XoodooLane) sipoLo <- mkMyShiftReg;
+  MyShiftRegWSO#(5, XoodooLane) sipoHi <- mkMyShiftRegWSO;
+  Reg#(UInt#(TLog#(TAdd#(MaxInRateLanes,1)))) sipoCount <- mkRegU;
   // 1 bit for each byte in every the input sipo lane
-  // make it simple, use MaxInRateLanes lanes, TODO? use just MaxOutRateLanes
-  MyShiftReg#(MaxInRateLanes, Bit#(4)) sipoFlags <- mkMyShiftReg;
+  // make it simple, use MaxInRateLanes lanes
+  MyShiftReg#(6, Bit#(4)) sipoFlags <- mkMyShiftReg;
+
+  PISO#(MaxOutRateLanes, XoodooLane) piso <- mkPISO;
 
   // FSMs
   Reg#(TransformState) xState <- mkReg(Absorb); // transform state
@@ -43,7 +47,7 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(SegmentType) inRecvType <- mkRegU;
   Reg#(Bool) lastWordPadded <- mkRegU;
 
-  Reg#(UInt#(TLog#(TAdd#(MaxOutRateLanes, 1)))) sipoValidLanes <- mkRegU;
+  Reg#(UInt#(TLog#(7))) sipoValidLanes <- mkRegU;
 
   Reg#(Bit#(2)) inPadarg  <- mkRegU;
   Reg#(Bit#(2)) outPadarg <- mkRegU;
@@ -65,18 +69,18 @@ module mkXoodyak(CryptoCoreIfc);
   let squeeze = enFirstSqueeze || enSecondSqueeze;
 
   let inRecvKey = inRecvType == Key;
-  let inRecvAD = inRecvType == AD;
+  let inRecvAD  = inRecvType == AD;
 
-  // let sipoWillFill = sipo.count == 10; // 11 - 1
-  let sipoWillFill =  (pack(sipo.count)[3] == 1 && pack(sipo.count)[1] == 1);
+  Probe#(Bool) padded_probe <- mkProbe;
 
   function Tuple2#(Vector#(12, XoodooLane),Vector#(MaxOutRateLanes, XoodooLane)) absorbNextAndOut;
     let currentState = concat(xoodooState);
-    Vector#(11, XoodooLane) inputXorState = toChunks(pack(sipo.data) ^ pack(init(currentState)));
+    Vector#(11, XoodooLane) inputXorState;
     Vector#(12, XoodooLane) nextState;
     Integer i;
     for (i=0; i<6; i=i+1) begin
-      let d = sipo.data[i];
+      inputXorState[i] = sipoLo.data[i] ^ currentState[i];
+      let d = sipoLo.data[i];
       let x = inputXorState[i];
       let lane = case (sipoFlags.data[i])
         4'b0001 : {x[31: 8], d[7 :0]};
@@ -88,6 +92,7 @@ module mkXoodyak(CryptoCoreIfc);
       nextState[i] = replaceLowerLanes ? lane : x;
     end
     for (i=6; i<11; i=i+1) begin
+      inputXorState[i] = sipoHi.data[i - 6] ^ currentState[i];
       nextState[i] = replaceAllLanes ? 0 : inputXorState[i];
     end
     XoodooLane lastLane = replaceAllLanes ? 0 : last(currentState);
@@ -109,11 +114,13 @@ module mkXoodyak(CryptoCoreIfc);
     if (replaceAllLanes) // HashMessage!
       replaceLowerLanes <= False;
     
+    sipoCount <= 0;
+    
     if (!squeeze) begin
       outLastBlock <= inLastBlock; // bdo.lot to pad output
       if (inLastBlock) begin
         case (inRecvType)
-          Plaintext, Ciphertext: begin
+          Plaintext, Ciphertext:begin
             enFirstSqueeze <= True;
             sipoValidLanes <= 4;
           end
@@ -121,23 +128,19 @@ module mkXoodyak(CryptoCoreIfc);
             enFirstSqueeze  <= True;
             enSecondSqueeze <= True;
             sipoValidLanes <= 4;
-            sipo.deq;
             inState <= InZeroFill;
           end
           default: begin
-            sipo.deq;
             inState <= InIdle;
           end
         endcase
       end else begin
-        sipo.deq;
         inState <= InBdi; // get more bdi
       end
     end else begin
       enFirstSqueeze  <= False;
       
       if (!(enFirstSqueeze && enSecondSqueeze)) begin
-        sipo.deq;
         inState <= InIdle;
       end
     end
@@ -165,27 +168,39 @@ module mkXoodyak(CryptoCoreIfc);
   rule rl_permute if (xState == Permute);
     if (roundCounter == fromInteger(valueOf(NumRounds) - 1))
       xState <= Absorb;
-    xoodooState <= round(xoodooState, roundCounter);
+    xoodooState <= round2x(xoodooState, roundCounter);
     roundCounter <= roundCounter + 1;
   endrule
+
+  function Action siposEnq(XoodooLane w);
+    action
+      sipoCount <= sipoCount + 1;
+      if(sipoCount < 6) begin
+        sipoLo.enq(w);
+        sipoHi.enq(0);
+      end else begin
+        sipoHi.enq(w);
+      end
+    endaction
+  endfunction
 
   (* fire_when_enabled *)
   rule rl_fill_zero if (inState == InZeroFill);
     zfilled <= True;
     fullAdBlock <= False;
     if(!zfilled && !enSecondSqueeze)
-      sipoValidLanes <= truncate(sipo.count);
-    
+      sipoValidLanes <= truncate(sipoCount);
+
     // replace state with key or 1st HashMessage block, extended with zeros
     sipoFlags.enq(replaceAllLanes ? 4'b1111 : 4'b0); 
     if (!zfilled && !lastWordPadded) begin
-      sipo.enq(inRecvKey ? 'h100 : 1);
+      siposEnq(inRecvKey ? 'h100 : 1);
     end
     else begin
-      sipo.enq(0);
+      siposEnq(0);
     end
 
-    if (sipoWillFill)
+    if ((!inRecvAD && sipoCount == 5) || sipoCount == 10)
       inState <= InFull;
   endrule
 
@@ -216,27 +231,28 @@ module mkXoodyak(CryptoCoreIfc);
   interface FifoIn bdi;
     method Action enq(i) if (inState == InBdi);
       match tagged BdIO {word: .word, lot: .lot, padarg: .padarg} = i;
-      match {.padded, .pw} = padWord(word, padarg, True); 
-      
-      sipo.enq(lot ? pw : word);
+      match {.padded, .pw} = padWord(word, padarg, True);
+
+      padded_probe <= padded;
+
+      siposEnq(lot ? pw : word);
       sipoFlags.enq(replaceAllLanes ? 4'b1111 : padargToFlag(lot, padarg));
 
-      let lastWordOfBlock =
-          case(inRecvType)
-            HashMessage: (pack(sipo.count)[1:0] == 3); // 4 - 1 for Key/Npub lot == True
-            // HashMessage, Key: (sipo.count == 3); // 4 - 1
-            default: (pack(sipo.count)[2] == 1 && pack(sipo.count)[0] == 1); // 6 - 1
-            // default: (sipo.count == 5); // 6 - 1
-          endcase;
+      let lastWordOfHMBlock = (inRecvType == HashMessage) && (sipoCount == 3); // 4 - 1
 
       if (inRecvAD) begin
-        if (sipoWillFill) begin
+        if (sipoCount == 10) begin
           inState <= InFull;
           fullAdBlock <= !(lot && padded);
         end else if (lot)
           inState  <= InZeroFill;
-      end else if (lot || lastWordOfBlock)
-        inState  <= InZeroFill; // fill happens only if sipo not already full (i.e not AD full block)
+      end else if (sipoCount == 5) begin
+        inState <= InFull;
+        if(!lot || !padded)
+          sipoHi.setOne();
+        sipoValidLanes <= 6;
+      end else if (lot || lastWordOfHMBlock) // for last word of Key and Npub: `lot` is True
+        inState <= InZeroFill;
 
       inPadarg <= padarg;
       inLastBlock <= lot;
@@ -257,4 +273,4 @@ module mkXoodyak(CryptoCoreIfc);
   
 endmodule : mkXoodyak
 
-endpackage : Xoodyak
+endpackage : Xoodyak2x

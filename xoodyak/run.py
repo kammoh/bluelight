@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from math import ceil, log2
+from typing import Any, List
 from cocotb_test.simulator import Verilator
 
 from pathlib import Path
@@ -13,6 +14,7 @@ import argparse
 import toml
 
 parser = argparse.ArgumentParser()
+parser.add_argument('design')
 parser.add_argument('--gen', action='store_true')
 parser.add_argument('--debug', action='store_true')
 parser.add_argument('--xoodyak-debug', action='store_true')
@@ -61,7 +63,8 @@ if args.gtkwave:
 
             for td in typedef_enum_re.finditer(c):
                 td_body = td.group(1)
-                td_body = ' '.join([x.split('//')[0].strip() for x in td_body.split('\n')] )
+                td_body = ' '.join([x.split('//')[0].strip()
+                                    for x in td_body.split('\n')])
                 td_name = td.group(2)
                 kvs = [re.split('\s*=\s*', x.strip())
                        for x in td_body.split(',')]
@@ -157,7 +160,10 @@ def bsc_generate_verilog():
     with open('xedaproject.toml') as f:
         xp = toml.load(f)
     designs = xp['design']
-    rtl_settings = designs[0]['rtl']
+    if not isinstance(designs, list):
+        designs = [designs]
+    xeda_design = next(filter(lambda d: d['name'] == args.design, designs), None)
+    rtl_settings = xeda_design['rtl']
     bsv_sources = [f for f in rtl_settings['sources'] if f.endswith('.bsv')]
     top_file = bsv_sources[-1]
     top = rtl_settings['top']
@@ -176,9 +182,10 @@ def bsc_generate_verilog():
     #     print(f'running {" ".join(cmd)}')
     #     subprocess.run(cmd, check=True)
 
-    bsc_flags.extend([
-        '-D', f'TOP_MODULE_NAME={top}'
-    ])
+    for param_name, param_value in rtl_settings.get('parameters', {}).items():
+        bsc_flags.extend([
+            '-D', f'{param_name}={param_value}'
+        ])
 
     cmd = [bsc_exec] + bsc_flags
 
@@ -250,7 +257,6 @@ def run_sim(top):
             '--x-assign', 'fast',  # perf: fast
         ]
 
-
     cocotb_env = dict(COCOTB_REDUCED_LOG_FMT='1',
                       COCOTB_ANSI_OUTPUT='1',
                       XOODYAK_DEBUG=str(
@@ -270,9 +276,9 @@ def run_sim(top):
     # COMPILE_ARGS
     # SIM_ARGS
     # RUN_ARGS
-    # EXTRA_ARGS <-> extra_args: 
-    ## Passed to both the compile and execute phases of simulators with two rules, 
-    #  or passed to the single compile and run command for simulators which don’t 
+    # EXTRA_ARGS <-> extra_args:
+    # Passed to both the compile and execute phases of simulators with two rules,
+    #  or passed to the single compile and run command for simulators which don’t
     #  have a distinct compilation stage.
     # PLUSARGS
     # SIM_BUILD

@@ -49,14 +49,14 @@ typedef Bit#(8) Byte;
 
 
 typedef enum {
-  AD     = 4'b0001,
-  PT     = 4'b0100,
-  CT     = 4'b0101,
-  Tag    = 4'b1000,
-  Key    = 4'b1100,
-  Npub   = 4'b1101,
-  HM     = 4'b0111,
-  Digest = 4'b1001
+  AD          = 4'b0001,
+  Plaintext   = 4'b0100,
+  Ciphertext  = 4'b0101,
+  Tag         = 4'b1000,
+  Key         = 4'b1100,
+  Npub        = 4'b1101,
+  HashMessage = 4'b0111,
+  Digest      = 4'b1001
 } SegmentType deriving (Bits, Eq, FShow);
 
 typedef enum {

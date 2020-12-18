@@ -13,12 +13,6 @@ Integer numLanesInState = valueOf(NumLanesInState);
 
 typedef 12 XoodyakRounds;
 
-`ifdef UNROLL
-typedef TDiv#(XoodyakRounds,2) NumRounds;
-`else
-typedef XoodyakRounds NumRounds;
-`endif
-
 typedef 44 Xoodyak_Rkin;
 typedef 24 Xoodyak_Rkout;
 typedef 16 Xoodyak_Rhash;
@@ -87,14 +81,32 @@ function XoodooState singleRound(XoodooState state, Bit#(10) rconst);
   return rho_east(chi(iota(rho_west(theta(state)), rconst)));
 endfunction
 
-function XoodooState round(XoodooState prev_state, UInt#(TLog#(NumRounds)) r);
-`ifdef UNROLL
+function XoodooState round(XoodooState prev_state, UInt#(TLog#(XoodyakRounds)) r);
+  return singleRound(prev_state, roundConst[r]);
+endfunction
+
+function XoodooState round2x(XoodooState prev_state, UInt#(TLog#(TDiv#(XoodyakRounds,2))) r);
   Vector#(12, Bit#(10)) v = arrayToVector(roundConst);
   Vector#(6, Vector#(2, Bit#(10))) consts = toChunks(v);
   return singleRound(singleRound(prev_state, consts[r][0]), consts[r][1]);
-`else
-  return singleRound(prev_state, roundConst[r]);
-`endif
 endfunction
+
+// only 4 bits of the constants are used, others are zero
+function Bit#(4) udConstBits(Bool firstBlock, Bool lastBlock, SegmentType typ);
+  return case (typ)
+    Key:  4'h2;
+    Npub: 4'h3;
+    AD: {pack(lastBlock), 1'b0, pack(firstBlock),  pack(firstBlock)};
+      // case (tuple2(firstBlock,lastBlock)) matches
+      //   {True,  True}: 4'hb;
+      //   {False, True}: 4'h8;
+      //   {True, False}: 4'h3;
+      //   default:       4'h0;
+      // endcase
+    Plaintext, Ciphertext: (lastBlock ? 4'h4 : 0);
+    default: zeroExtend(pack(firstBlock));// HashMessage: firstBlock ? 4'h1 : 0);
+    // default: 0;
+  endcase;
+endfunction : udConstBits
 
 endpackage : XoodooDefs

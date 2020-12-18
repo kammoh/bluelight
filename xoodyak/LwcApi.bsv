@@ -60,10 +60,10 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
   let pdiGet = fifoToGet(pdiReceiver.out).get;
   let sdiGet = fifoToGet(sdiReceiver.out).get;
 
-  Reg#(Bit#(14)) inWordCounter     <- mkRegU;
-  Reg#(Bit#(14)) outCounter        <- mkRegU;
-  Reg#(Bit#(2)) finalRemainBytes  <- mkRegU;
-  Reg#(Bit#(2)) outRemainder      <- mkRegU;
+  Reg#(Bit#(14)) inWordCounter    <- mkRegU;
+  Reg#(Bit#(14)) outCounter       <- mkRegU;
+  Reg#(Bit#(2))  finalRemainBytes <- mkRegU;
+  Reg#(Bit#(2))  outRemainder     <- mkRegU;
 
   Reg#(Bool) inSegLast   <- mkRegU; // last segment
   Reg#(Bool) outSegLast  <- mkRegU; // last segment
@@ -130,7 +130,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     let eot  = headerEoT(hdr);
 
     inSegType <= typ;
-    inSegEoT <= eot;
+    inSegEoT  <= eot;
 
     // $display("Got header: typ: ", fshow(typ), ", len: ", len, " eot:", eot, " last:", last);
 
@@ -139,11 +139,11 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     inSegLast        <= last;
 
     case (typ) matches
-      CT:
-        headersFifo.enq(make_header(PT,     eot,  True,  len));
-      PT:
-        headersFifo.enq(make_header(CT,     eot,  False, len));
-      HM &&& last:
+      Ciphertext:
+        headersFifo.enq(make_header(Plaintext,  eot,  True,  len));
+      Plaintext:
+        headersFifo.enq(make_header(Ciphertext, eot,  False, len));
+      HashMessage &&& last:
         headersFifo.enq(make_header(Digest, True, True, fromInteger(crypto_hash_bytes)));
     endcase
 
@@ -152,10 +152,10 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     
     if (empty)
     begin
-      if(eot && typ == CT)
+      if(eot && typ == Ciphertext)
         inState <= GetTagHeader;
       else if (last)
-        inState <= (typ == PT) ? EnqTagHeader : GetPdiInstruction;
+        inState <= (typ == Plaintext) ? EnqTagHeader : GetPdiInstruction;
       // if !last: get more PDI headers
     end
     else
@@ -190,10 +190,10 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     cryptoCore.bdi.enq( BdIO {word: swapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
 
     if (last_of_seg) begin
-      if (inSegEoT && inSegType == PT)
+      if (inSegEoT && inSegType == Plaintext)
         inState <= EnqTagHeader;
       else
-        if (inSegEoT && inSegType == CT)
+        if (inSegEoT && inSegType == Ciphertext)
           inState <= GetTagHeader;
         else
           inState <= inSegLast ? GetPdiInstruction : GetPdiHeader;
@@ -225,7 +225,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
   endrule
 
   (* fire_when_enabled *)
-  rule rl_enq_tag if (inState == EnqTagHeader); // only in encrypt, after last PT was read
+  rule rl_enq_tag if (inState == EnqTagHeader); // only in encrypt, after last Plaintext was read
     headersFifo.enq(make_header(Tag, True, True, fromInteger(crypto_abytes)));
     inState <= GetPdiInstruction;
   endrule
@@ -251,7 +251,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
       outCounter <= hi;
       outState   <= SendData;
     end
-    else if (typ == PT) begin
+    else if (typ == Plaintext) begin
       outState  <= VerifyTag;
       outCounter <= 4; //FIXME from core/inputs
     end
@@ -290,7 +290,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     let last_of_seg = outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0));
     if (last_of_seg) begin
       if (outSegLast)
-        if (outSegType == PT) begin
+        if (outSegType == Plaintext) begin
           outCounter <= 4;
           outState <= VerifyTag;
         end

@@ -43,6 +43,7 @@ class XoodyakRefCheckerTb(LwcRefCheckerTb):
         super().__init__(dut, ref, debug=debug, max_in_stalls=max_in_stalls,
                          max_out_stalls=max_out_stalls)
 
+
 @cocotb.test()
 async def blanket_test1(dut: SimHandleBase):
 
@@ -58,7 +59,8 @@ async def blanket_test1(dut: SimHandleBase):
     tb = XoodyakRefCheckerTb(
         dut, debug=debug, max_in_stalls=10, max_out_stalls=10)
 
-    short_size = [0, 1, 15, 16, 43, 61, 64, 179] + [randint(2,180) for _ in range (20)]
+    short_size = [0, 1, 15, 16, 43, 61, 64, 179] + \
+        [randint(2, 180) for _ in range(20)]
 
     await tb.start()
 
@@ -68,7 +70,6 @@ async def blanket_test1(dut: SimHandleBase):
 
     for ad_size, pt_size in itertools.product(short_size, short_size):
         await tb.xenc_test(ad_size=ad_size, pt_size=pt_size)
-
 
     await tb.xdec_test(ad_size=1536, ct_size=0)
     await tb.xenc_test(ad_size=1536, pt_size=0)
@@ -80,6 +81,7 @@ async def blanket_test1(dut: SimHandleBase):
 
     await tb.join_drivers()
     await tb.join_monitors()
+
 
 @cocotb.test()
 async def blanket_test2(dut: SimHandleBase):
@@ -96,15 +98,13 @@ async def blanket_test2(dut: SimHandleBase):
     tb = XoodyakRefCheckerTb(
         dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
 
-
-    sizes = [0, 1, 15, 16, 43, 61, 64, 179, 1536] + [randint(2,230) for _ in range (30)]
+    sizes = [0, 1, 15, 16, 43, 61, 64, 179, 1536] + \
+        [randint(2, 230) for _ in range(30)]
 
     sizes = list(set(sizes))
     random.shuffle(sizes)
 
     await tb.start()
-
-
 
     for size1, size2 in itertools.product(sizes, sizes):
         op = randint(0, 2)
@@ -118,7 +118,6 @@ async def blanket_test2(dut: SimHandleBase):
             # print("testing Hash x2")
             await tb.xhash_test(hm_size=size1)
             await tb.xhash_test(hm_size=size1 + size2)
-
 
     await tb.launch_monitors()
     await tb.launch_drivers()
@@ -139,15 +138,18 @@ async def debug_enc(dut: SimHandleBase):
     #     debug = bool(debug)
     print(f'XOODYAK_DEBUG={debug}')
 
-    max_stalls = 10
-    tb = XoodyakRefCheckerTb(
-        dut, debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
+    max_stalls = 0
+    tb = LwcRefCheckerTb(
+        dut, ref=Xoodyak(debug=debug), debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
 
     await tb.start()
 
-    await tb.xenc_test(ad_size=63, pt_size=0)
-    await tb.xenc_test(ad_size=0, pt_size=63)
+    await tb.xenc_test(ad_size=4,  pt_size=4)
+    await tb.xenc_test(ad_size=4,  pt_size=24)
     await tb.xenc_test(ad_size=44, pt_size=32)
+    await tb.xenc_test(ad_size=45, pt_size=0)
+    await tb.xenc_test(ad_size=44, pt_size=0)
+    await tb.xenc_test(ad_size=0,  pt_size=45)
     await tb.xenc_test(ad_size=65, pt_size=65)
 
     await tb.launch_monitors()
@@ -155,6 +157,7 @@ async def debug_enc(dut: SimHandleBase):
 
     await tb.join_drivers(10000)
     await tb.join_monitors(10000)
+
 
 @cocotb.test()
 async def debug_dec(dut: SimHandleBase):
@@ -184,6 +187,7 @@ async def debug_dec(dut: SimHandleBase):
 
     await tb.join_drivers(10000)
     await tb.join_monitors(10000)
+
 
 @cocotb.test()
 async def debug_hash(dut: SimHandleBase):
@@ -232,7 +236,7 @@ async def measure_timings(dut: SimHandleBase):
     for op in ['enc', 'dec']:
         results = {}
         bt = 'AD'
-        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]    
+        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
             # print(f'{op} PT=0 AD={sz}: {cycles}')
@@ -251,7 +255,7 @@ async def measure_timings(dut: SimHandleBase):
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=sz))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {sz}'] = cycles
-        for x in [4,5]:
+        for x in [4, 5]:
             cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes['AD'], xt_size=x*block_sizes['PT/CT']))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {x}BS'] = cycles

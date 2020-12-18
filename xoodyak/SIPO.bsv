@@ -124,4 +124,41 @@ module mkMyShiftReg (MyShiftReg#(size, el_type)) provisos (Bits#(el_type, el_typ
   endmethod
 endmodule : mkMyShiftReg
 
+// with set-one
+interface MyShiftRegWSO #(numeric type size, type el_type);
+  (* always_ready *)
+  method Action enq(el_type in_data); 
+  (* always_ready *)
+  method Action setOne; // has priority over enq
+  (* always_ready *)
+  method Vector#(size, el_type) data;
+endinterface
+
+module mkMyShiftRegWSO (MyShiftRegWSO#(size, el_type)) provisos (Bits#(el_type, el_type_sz), PrimUpdateable#(el_type, a__), SizedLiteral#(a__, 1));
+  Reg#(Vector#(size, el_type)) vec <- mkRegU;
+
+  let doSetOne <- mkPulseWire;
+  let enqData <- mkRWire;
+
+  (* fire_when_enabled, no_implicit_conditions *)
+  rule rl_update_vec;
+    if (doSetOne) // setOne has priority over enq
+      vec[0][0] <= 1'b1;
+    else if (enqData.wget matches tagged Valid .v)
+      vec <= shiftInAtN(vec, v);
+  endrule
+
+  method Action setOne;
+    doSetOne.send;
+  endmethod
+
+  method Action enq(el_type v);
+    enqData.wset(v);
+  endmethod
+
+  method Vector#(size, el_type) data;
+    return vec;
+  endmethod
+endmodule : mkMyShiftRegWSO
+
 endpackage : SIPO

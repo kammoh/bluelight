@@ -4,7 +4,7 @@ description = "Part of the BlueLight implementations"
 author = "Kamyar Mohajerani"
 
 [[design]]
-name = 'Xoodyak_BSV'
+name = 'Xoodyak'
 
 [design.rtl]
 sources = [
@@ -20,6 +20,7 @@ sources = [
     'XoodyakLwc.bsv',
 ]
 top = 'lwc'
+parameters.TOP_MODULE_NAME = 'lwc'
 
 [[design]]
 name = 'Xoodyak_BSV_v'
@@ -63,6 +64,27 @@ optimize_power = false
 strategy = 'Timing'
 fmax_low_freq = 240
 fmax_high_freq = 320
+
+
+[[design]]
+name = 'Xoodyak2x'
+
+[design.rtl]
+sources = [
+    'Bus/BusDefines.bsv',
+    'Bus/BusFIFO.bsv',
+    'Bus/Bus.bsv',
+    'CryptoCore.bsv',
+    'XoodooDefs.bsv',
+    'SIPO.bsv',
+    'PISO.bsv',
+    'Xoodyak2x.bsv',
+    'LwcApi.bsv',
+    'XoodyakLwc.bsv',
+]
+top = 'lwc'
+parameters.TOP_MODULE_NAME = 'lwc'
+parameters.UNROLLED = true
 
 [flows.vivado_sim]
 # vcd='debug.vcd'

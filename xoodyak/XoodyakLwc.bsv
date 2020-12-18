@@ -1,7 +1,11 @@
 package XoodyakLwc;
 
 import LwcApi :: *;
+`ifdef UNROLLED
+import Xoodyak2x :: *;
+`else
 import Xoodyak :: *;
+`endif
 
 `ifndef TOP_MODULE_NAME
 `define TOP_MODULE_NAME lwc
