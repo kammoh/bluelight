@@ -8,15 +8,15 @@ name = 'Xoodyak'
 
 [design.rtl]
 sources = [
-    'Bus/BusDefines.bsv',
-    'Bus/BusFIFO.bsv',
-    'Bus/Bus.bsv',
-    'CryptoCore.bsv',
+    'bluelight/Bus/BusDefines.bsv',
+    'bluelight/Bus/BusFIFO.bsv',
+    'bluelight/Bus/Bus.bsv',
+    'bluelight/CryptoCore.bsv',
+    'bluelight/LwcApi.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',
     'Xoodyak.bsv',
-    'LwcApi.bsv',
     'XoodyakLwc.bsv',
 ]
 top = 'lwc'
@@ -51,7 +51,7 @@ top = "LWC_TB"
 # G_FNAME_DO.file  = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/do.txt"
 G_FNAME_PDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/pdi.txt"
 G_FNAME_SDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/sdi.txt"
-G_FNAME_DO.file  = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/do.txt"
+G_FNAME_DO.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/do.txt"
 G_TEST_MODE = 0
 G_MAX_FAILURES = 1
 
@@ -71,15 +71,15 @@ name = 'Xoodyak2x'
 
 [design.rtl]
 sources = [
-    'Bus/BusDefines.bsv',
-    'Bus/BusFIFO.bsv',
-    'Bus/Bus.bsv',
-    'CryptoCore.bsv',
+    'bluelight/Bus/BusDefines.bsv',
+    'bluelight/Bus/BusFIFO.bsv',
+    'bluelight/Bus/Bus.bsv',
+    'bluelight/CryptoCore.bsv',
+    'bluelight/LwcApi.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',
     'Xoodyak2x.bsv',
-    'LwcApi.bsv',
     'XoodyakLwc.bsv',
 ]
 top = 'lwc'
