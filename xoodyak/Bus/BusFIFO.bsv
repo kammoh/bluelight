@@ -8,11 +8,11 @@
 package BusFIFO;
 
 import BusDefines::*;
-import Connectable::*;
+// import Connectable::*;
 import FIFO::*;
 import FIFOF::*;
 import SpecialFIFOs::*;
-import FShow::*;
+// import FShow::*;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///

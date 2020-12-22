@@ -104,8 +104,7 @@ function Bit#(4) udConstBits(Bool firstBlock, Bool lastBlock, SegmentType typ);
       //   default:       4'h0;
       // endcase
     Plaintext, Ciphertext: (lastBlock ? 4'h4 : 0);
-    default: zeroExtend(pack(firstBlock));// HashMessage: firstBlock ? 4'h1 : 0);
-    // default: 0;
+    default: zeroExtend(pack(firstBlock)); // HashMessage: firstBlock ? 4'h1 : 0);
   endcase;
 endfunction : udConstBits
 

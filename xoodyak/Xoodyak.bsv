@@ -65,10 +65,12 @@ module mkXoodyak(CryptoCoreIfc);
   let squeeze = enFirstSqueeze || enSecondSqueeze;
 
   let inRecvKey = inRecvType == Key;
-  let inRecvAD = inRecvType == AD;
+  let inRecvAD  = inRecvType == AD;
 
-  // let sipoWillFill = sipo.count == 10; // 11 - 1
-  let sipoWillFill =  (pack(sipo.count)[3] == 1 && pack(sipo.count)[1] == 1);
+  let sipoCount = sipo.count;
+  let sipoCountReached3  = pack(sipoCount)[1:0] == 3;
+  let sipoCountReached5  = pack(sipoCount)[2] == 1 && pack(sipoCount)[0] == 1;
+  let sipoCountReached10 = pack(sipoCount)[3] == 1 && pack(sipoCount)[1] == 1;
 
   function Tuple2#(Vector#(12, XoodooLane),Vector#(MaxOutRateLanes, XoodooLane)) absorbNextAndOut;
     let currentState = concat(xoodooState);
@@ -174,8 +176,7 @@ module mkXoodyak(CryptoCoreIfc);
     zfilled <= True;
     fullAdBlock <= False;
     if(!zfilled && !enSecondSqueeze)
-      sipoValidLanes <= truncate(sipo.count);
-    
+      sipoValidLanes <= truncate(sipoCount);
     // replace state with key or 1st HashMessage block, extended with zeros
     sipoFlags.enq(replaceAllLanes ? 4'b1111 : 4'b0); 
     if (!zfilled && !lastWordPadded) begin
@@ -185,7 +186,7 @@ module mkXoodyak(CryptoCoreIfc);
       sipo.enq(0);
     end
 
-    if (sipoWillFill)
+    if (sipoCountReached10)
       inState <= InFull;
   endrule
 
@@ -203,10 +204,10 @@ module mkXoodyak(CryptoCoreIfc);
     inRecvType     <=   typ;
     inFirstBlock   <=  True;
     inLastBlock    <= empty;
-    zfilled        <= False;
+    zfilled         <= False;
     fullAdBlock    <= False;
     lastWordPadded <= False;
-    udConstReg <= udConstBits(True, empty, typ);
+    udConstReg     <= udConstBits(True, empty, typ);
     inState <= empty ? InZeroFill : InBdi;
 
     replaceAllLanes   <= typ == Key || typ == HashMessage;
@@ -223,14 +224,12 @@ module mkXoodyak(CryptoCoreIfc);
 
       let lastWordOfBlock =
           case(inRecvType)
-            HashMessage: (pack(sipo.count)[1:0] == 3); // 4 - 1 for Key/Npub lot == True
-            // HashMessage, Key: (sipo.count == 3); // 4 - 1
-            default: (pack(sipo.count)[2] == 1 && pack(sipo.count)[0] == 1); // 6 - 1
-            // default: (sipo.count == 5); // 6 - 1
+            HashMessage: sipoCountReached3;
+            default: sipoCountReached5;
           endcase;
 
       if (inRecvAD) begin
-        if (sipoWillFill) begin
+        if (sipoCountReached10) begin
           inState <= InFull;
           fullAdBlock <= !(lot && padded);
         end else if (lot)

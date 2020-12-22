@@ -45,11 +45,8 @@ class XoodyakRefCheckerTb(LwcRefCheckerTb):
 
 
 @cocotb.test()
-async def blanket_test1(dut: SimHandleBase):
-
+async def blanket_test_simple(dut: SimHandleBase):
     debug = os.environ.get('XOODYAK_DEBUG', False)
-    # debug = True
-
     try:
         debug = bool(int(debug))
     except:
@@ -73,6 +70,7 @@ async def blanket_test1(dut: SimHandleBase):
 
     await tb.xdec_test(ad_size=1536, ct_size=0)
     await tb.xenc_test(ad_size=1536, pt_size=0)
+    await tb.xdec_test(ad_size=0, ct_size=1536)
     await tb.xenc_test(ad_size=0, pt_size=1536)
     await tb.xdec_test(ad_size=0, ct_size=1535)
 
@@ -84,7 +82,7 @@ async def blanket_test1(dut: SimHandleBase):
 
 
 @cocotb.test()
-async def blanket_test2(dut: SimHandleBase):
+async def randomized_tests(dut: SimHandleBase):
 
     debug = os.environ.get('XOODYAK_DEBUG', False)
     # debug = True
@@ -98,26 +96,24 @@ async def blanket_test2(dut: SimHandleBase):
     tb = XoodyakRefCheckerTb(
         dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
 
-    sizes = [0, 1, 15, 16, 43, 61, 64, 179, 1536] + \
-        [randint(2, 230) for _ in range(30)]
+    sizes = [0, 1, 15, 16, 17,  23, 24, 25, 31, 32, 33, 43, 44, 45, 47, 48, 49, 61, 64, 65, 67] + \
+        [randint(2, 300) for _ in range(30)]
 
-    sizes = list(set(sizes))
+    sizes = list(set(sizes))  # unique
     random.shuffle(sizes)
+    sizes2 = sizes[:]
+    random.shuffle(sizes2)
 
     await tb.start()
 
-    for size1, size2 in itertools.product(sizes, sizes):
+    for size1, size2 in itertools.product(sizes, sizes2):
         op = randint(0, 2)
         if (op == 0):
-            # print("testing Encrypt")
             await tb.xenc_test(ad_size=size1, pt_size=size2)
         elif (op == 1):
-            # print("testing Decrypt")
             await tb.xdec_test(ad_size=size1, ct_size=size2)
         else:
-            # print("testing Hash x2")
             await tb.xhash_test(hm_size=size1)
-            await tb.xhash_test(hm_size=size1 + size2)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
@@ -128,16 +124,7 @@ async def blanket_test2(dut: SimHandleBase):
 
 @cocotb.test()
 async def debug_enc(dut: SimHandleBase):
-
-    # debug = os.environ.get('XOODYAK_DEBUG', False)
     debug = True
-
-    # try:
-    #     debug = bool(int(debug))
-    # except:
-    #     debug = bool(debug)
-    print(f'XOODYAK_DEBUG={debug}')
-
     max_stalls = 0
     tb = LwcRefCheckerTb(
         dut, ref=Xoodyak(debug=debug), debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
@@ -161,16 +148,7 @@ async def debug_enc(dut: SimHandleBase):
 
 @cocotb.test()
 async def debug_dec(dut: SimHandleBase):
-
-    # debug = os.environ.get('XOODYAK_DEBUG', False)
     debug = True
-
-    # try:
-    #     debug = bool(int(debug))
-    # except:
-    #     debug = bool(debug)
-    print(f'XOODYAK_DEBUG={debug}')
-
     max_stalls = 0
     tb = XoodyakRefCheckerTb(
         dut, debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
@@ -233,24 +211,27 @@ async def measure_timings(dut: SimHandleBase):
     all_results = {}
     block_sizes = {'AD': 352 // 8, 'PT/CT': 192 // 8, 'HM':  128 // 8}
 
+    sizes = [16, 64, 1536]
+
     for op in ['enc', 'dec']:
         results = {}
         bt = 'AD'
-        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
-            # print(f'{op} PT=0 AD={sz}: {cycles}')
             results[f'{bt} {sz}'] = cycles
-
+        for x in [4, 5]:
+            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes[bt], xt_size=0))
+            results[f'{bt} {x}BS'] = cycles
+        results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
         bt = 'PT/CT'
-        sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
-            # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {sz}'] = cycles
-
+        for x in [4, 5]:
+            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=x*block_sizes[bt]))
+            results[f'{bt} {x}BS'] = cycles
+        results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
         bt = 'AD+PT/CT'
-        sizes = [16, 64, 1536]
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=sz))
             # print(f'{op} PT={sz} AD=0: {cycles}')
@@ -259,18 +240,21 @@ async def measure_timings(dut: SimHandleBase):
             cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes['AD'], xt_size=x*block_sizes['PT/CT']))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {x}BS'] = cycles
-
+        results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
         all_results[op] = results
 
-    bt = 'HM'
-    sizes = [16, 64, 1536, 4 * block_sizes[bt], 5 * block_sizes[bt]]
     results = {}
+    op = 'hash'
+    bt = 'HM'
     for sz in sizes:
-        cycles = await tb.measure_op(dict(op='hash', hm_size=sz))
+        cycles = await tb.measure_op(dict(op=op, hm_size=sz))
         # print(f'hash HM={sz}: {cycles}')
         results[f'{bt} {sz}'] = cycles
-
-    all_results['hash'] = results
+    for x in [4, 5]:
+        cycles = await tb.measure_op(dict(op=op, hm_size=x*block_sizes[bt]))
+        results[f'{bt} {x}BS'] = cycles
+    results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
+    all_results[op] = results
 
     pprint(all_results)
 

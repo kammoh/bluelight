@@ -2,15 +2,13 @@ package Xoodyak2x;
 
 import Vector::*;
 import GetPut::*;
-import Probe::*;
 
 import XoodooDefs::*;
 import SIPO::*;
 import PISO::*;
 import CryptoCore::*;
 
-// unrolled by 2x
-typedef TDiv#(XoodyakRounds,2) NumRounds;
+typedef TDiv#(XoodyakRounds,2) NumRounds; // unrolled by 2x
 
 typedef enum {
   InIdle, // waiting on process command
@@ -26,12 +24,11 @@ typedef enum {
 
 // (* synthesize *)
 module mkXoodyak(CryptoCoreIfc);
-  MyShiftReg#(6, XoodooLane) sipoLo <- mkMyShiftReg;
+  MyShiftReg#(MaxOutRateLanes, XoodooLane) sipoLo <- mkMyShiftReg;
   MyShiftRegWSO#(5, XoodooLane) sipoHi <- mkMyShiftRegWSO;
-  Reg#(UInt#(TLog#(TAdd#(MaxInRateLanes,1)))) sipoCount <- mkRegU;
+  Reg#(UInt#(TLog#(TAdd#(MaxInRateLanes,1)))) sipoCount <- mkReg(0); // either reset to 0 or assign to 0 on process()
   // 1 bit for each byte in every the input sipo lane
-  // make it simple, use MaxInRateLanes lanes
-  MyShiftReg#(6, Bit#(4)) sipoFlags <- mkMyShiftReg;
+  MyShiftReg#(MaxOutRateLanes, Bit#(4)) sipoFlags <- mkMyShiftReg;
 
   PISO#(MaxOutRateLanes, XoodooLane) piso <- mkPISO;
 
@@ -47,7 +44,7 @@ module mkXoodyak(CryptoCoreIfc);
   Reg#(SegmentType) inRecvType <- mkRegU;
   Reg#(Bool) lastWordPadded <- mkRegU;
 
-  Reg#(UInt#(TLog#(7))) sipoValidLanes <- mkRegU;
+  Reg#(UInt#(TLog#(TAdd#(MaxOutRateLanes, 1)))) sipoValidLanes <- mkRegU;
 
   Reg#(Bit#(2)) inPadarg  <- mkRegU;
   Reg#(Bit#(2)) outPadarg <- mkRegU;
@@ -71,7 +68,9 @@ module mkXoodyak(CryptoCoreIfc);
   let inRecvKey = inRecvType == Key;
   let inRecvAD  = inRecvType == AD;
 
-  Probe#(Bool) padded_probe <- mkProbe;
+  let sipoCountReached3  = pack(sipoCount)[1:0] == 3;
+  let sipoCountReached5  = pack(sipoCount)[2] == 1 && pack(sipoCount)[0] == 1;
+  let sipoCountReached10 = pack(sipoCount)[3] == 1 && pack(sipoCount)[1] == 1;
 
   function Tuple2#(Vector#(12, XoodooLane),Vector#(MaxOutRateLanes, XoodooLane)) absorbNextAndOut;
     let currentState = concat(xoodooState);
@@ -120,7 +119,7 @@ module mkXoodyak(CryptoCoreIfc);
       outLastBlock <= inLastBlock; // bdo.lot to pad output
       if (inLastBlock) begin
         case (inRecvType)
-          Plaintext, Ciphertext:begin
+          Plaintext, Ciphertext: begin
             enFirstSqueeze <= True;
             sipoValidLanes <= 4;
           end
@@ -190,7 +189,6 @@ module mkXoodyak(CryptoCoreIfc);
     fullAdBlock <= False;
     if(!zfilled && !enSecondSqueeze)
       sipoValidLanes <= truncate(sipoCount);
-
     // replace state with key or 1st HashMessage block, extended with zeros
     sipoFlags.enq(replaceAllLanes ? 4'b1111 : 4'b0); 
     if (!zfilled && !lastWordPadded) begin
@@ -200,7 +198,7 @@ module mkXoodyak(CryptoCoreIfc);
       siposEnq(0);
     end
 
-    if ((!inRecvAD && sipoCount == 5) || sipoCount == 10)
+    if ((!inRecvAD && sipoCountReached5) || sipoCountReached10)
       inState <= InFull;
   endrule
 
@@ -218,10 +216,10 @@ module mkXoodyak(CryptoCoreIfc);
     inRecvType     <=   typ;
     inFirstBlock   <=  True;
     inLastBlock    <= empty;
-    zfilled        <= False;
+    zfilled         <= False;
     fullAdBlock    <= False;
     lastWordPadded <= False;
-    sipoCount      <= 0;
+    // sipoCount      <= 0; // either reset to 0 assugb 0 here
     udConstReg     <= udConstBits(True, empty, typ);
     inState <= empty ? InZeroFill : InBdi;
 
@@ -234,20 +232,18 @@ module mkXoodyak(CryptoCoreIfc);
       match tagged BdIO {word: .word, lot: .lot, padarg: .padarg} = i;
       match {.padded, .pw} = padWord(word, padarg, True);
 
-      padded_probe <= padded;
-
       siposEnq(lot ? pw : word);
       sipoFlags.enq(replaceAllLanes ? 4'b1111 : padargToFlag(lot, padarg));
 
-      let lastWordOfHMBlock = (inRecvType == HashMessage) && (sipoCount == 3); // 4 - 1
+      let lastWordOfHMBlock = (inRecvType == HashMessage) && sipoCountReached3;
 
       if (inRecvAD) begin
-        if (sipoCount == 10) begin
+        if (sipoCountReached10) begin
           inState <= InFull;
           fullAdBlock <= !(lot && padded);
         end else if (lot)
           inState  <= InZeroFill;
-      end else if (sipoCount == 5) begin
+      end else if (sipoCountReached5) begin
         inState <= InFull;
         if(!lot || !padded)
           sipoHi.setOne();
