@@ -18,8 +18,8 @@ FPGA implementation targeting Xilinx `xc7a12tcsg325-3` using Vivado 2020.1 for m
 
 |        |  F_max (MHz)|         LUTs |        FFs |     Slices | AD Throughput | PT/CT Throughput | Hash Throughput |
 |:------:|:-----------:|-------------:|-----------:|-----------:|--------------:|-----------------:|----------------:|
-| **v1** |  307        |         1523 |       1249 |        486 | 8190 Mbps     | 4467 Mbps        | 2978 Mbps       |
-| **v2** |  195        |         2239 |       1228 |        668 | 5720 Mbps     | 5348 Mbps        | 3565 Mbps       |
+| **v1** |  314.961    |         1501 |       1249 |        490 | 8528.2 Mbps   | 4651.7 Mbps      | 3101.2 Mbps     |
+| **v2** |  199.045    |         2322 |       1228 |        692 | 5838.7 Mbps   | 5459.5 Mbps      | 3639.7 Mbps     |
 
 
 For further details on throughput measurements and comparison to other LWC submissions, please see [here](https://eprint.iacr.org/2020/1207). Further details about Keccak Team's [implementation](https://github.com/KeccakTeam/Xoodoo/tree/master/Hardware) are available [here](https://csrc.nist.gov/CSRC/media/Projects/lightweight-cryptography/documents/round-2/status-update-sep2020/Xoodyak-update.pdf).
