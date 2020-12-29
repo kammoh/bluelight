@@ -204,7 +204,7 @@ module mkXoodyak(CryptoCoreIfc);
     inRecvType     <=   typ;
     inFirstBlock   <=  True;
     inLastBlock    <= empty;
-    zfilled         <= False;
+    zfilled        <= False;
     fullAdBlock    <= False;
     lastWordPadded <= False;
     udConstReg     <= udConstBits(True, empty, typ);

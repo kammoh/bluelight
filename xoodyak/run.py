@@ -23,6 +23,16 @@ parser.add_argument('--tests', nargs='+', help='Test functions to run')
 
 args = parser.parse_args()
 
+with open('xedaproject.toml') as f:
+    xp = toml.load(f)
+designs = xp['design']
+if not isinstance(designs, list):
+    designs = [designs]
+xeda_design = next(
+    filter(lambda d: d['name'] == args.design, designs), None)
+rtl_settings = xeda_design['rtl']
+bsv_sources = [f for f in rtl_settings['sources'] if f.endswith('.bsv')]
+
 if args.gtkwave:
     import vcd
     import vcd.gtkw
@@ -57,11 +67,14 @@ if args.gtkwave:
         # 'Xoodyak::TransformState': tr_enum('bin', 'Absorb', 'Permute', 'Squeeze'),
     }
 
-    for pkg in ['CryptoCore', 'LwcApi', 'Xoodyak']:
-        with open(f'{pkg}.bsv') as f:
-            c = f.read()
+    for bsv_file in bsv_sources:
+        with open(bsv_file) as f:
+            content = f.read()
 
-            for td in typedef_enum_re.finditer(c):
+            pkg_groups = next(re.finditer(r'\bpackage\s+(\w+)\s*;', content))
+            pkg = pkg_groups.group(1)
+
+            for td in typedef_enum_re.finditer(content):
                 td_body = td.group(1)
                 td_body = ' '.join([x.split('//')[0].strip()
                                     for x in td_body.split('\n')])
@@ -157,15 +170,6 @@ def get_used_mods(use_dir: Path, mod: str):
 
 
 def bsc_generate_verilog():
-    with open('xedaproject.toml') as f:
-        xp = toml.load(f)
-    designs = xp['design']
-    if not isinstance(designs, list):
-        designs = [designs]
-    xeda_design = next(
-        filter(lambda d: d['name'] == args.design, designs), None)
-    rtl_settings = xeda_design['rtl']
-    bsv_sources = [f for f in rtl_settings['sources'] if f.endswith('.bsv')]
     top_file = bsv_sources[-1]
     top = rtl_settings['top']
     if vout_dir.exists():
