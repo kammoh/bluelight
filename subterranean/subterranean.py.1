@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+
+from typing import Tuple
+from pathlib import Path
+from typing import Tuple
+import os
+import inspect
+
+
+SCRIPT_DIR = os.path.realpath(os.path.dirname(
+    inspect.getfile(inspect.currentframe())))
+
+from lwc_api import LwcAead, LwcHash, LwcCffi
+
+
+class SubterraneanCref(LwcCffi, LwcAead, LwcHash):
+    aead_algorithm = 'subterraneanv1'
+    hash_algorithm = 'subterraneanv1'
+    root_cref_dir = Path(SCRIPT_DIR) / 'cref'
+
+
+SUBTERRANEAN_SIZE = 257
+
+def bits_to_hex_string(in_bits, big_endian=True):
+    string_state = ""
+    if(len(in_bits) % 8 == 0):
+        final_position = len(in_bits) - 8
+    else:
+        final_position = len(in_bits) - (len(in_bits) % 8)
+    for i in range(0, final_position, 8):
+        temp_value = in_bits[i] + 2*in_bits[i+1] + 4*in_bits[i+2] + 8*in_bits[i+3] + \
+            16*in_bits[i+4] + 32*in_bits[i+5] + \
+            64*in_bits[i+6] + 128*in_bits[i+7]
+        if(big_endian):
+            string_state = string_state + "{0:02x}".format(temp_value)
+        else:
+            string_state = "{0:02x}".format(temp_value) + string_state
+    mult_factor = 1
+    temp_value = 0
+    for i in range(final_position, len(in_bits)):
+        temp_value += mult_factor*in_bits[i]
+        mult_factor *= 2
+    if(big_endian):
+        string_state = string_state + "{0:02x}".format(temp_value)
+    else:
+        string_state = "{0:02x}".format(temp_value) + string_state
+    return string_state
+
+
+def bytearray_to_bits(value):
+    value_bits = [((int(value[i//8]) & (1 << (i % 8))) >> (i % 8))
+                  for i in range(len(value)*8)]
+    return value_bits
+
+
+def bits_to_bytearray(value):
+    if value is None:
+        return None
+    value_bytearray = bytearray((len(value)+7)//8)
+    if len(value) != 0:
+        if(len(value) % 8 == 0):
+            final_position = len(value) - 8
+        else:
+            final_position = len(value) - (len(value) % 8)
+        j = 0
+        for i in range(0, final_position, 8):
+            value_bytearray[j] = value[i] + 2*value[i+1] + 4*value[i+2] + 8 * \
+                value[i+3] + 16*value[i+4] + 32*value[i+5] + \
+                64*value[i+6] + 128*value[i+7]
+            j += 1
+        mult_factor = 1
+        value_bytearray[j] = 0
+        for i in range(final_position, len(value)):
+            value_bytearray[j] += mult_factor*value[i]
+            mult_factor *= 2
+    return value_bytearray
+
+
+class Subterranean(LwcAead, LwcHash):
+    aead_algorithm = 'subterraneanv1'
+    hash_algorithm = 'subterraneanv1'
+
+    CRYPTO_KEYBYTES = 16
+    CRYPTO_NPUBBYTES = 16
+    CRYPTO_ABYTES = 16
+    CRYPTO_HASH_BYTES = 32
+
+    def __init__(self) -> None:
+        self.initialize_state()
+
+    def initialize_state(self) -> None:
+        self.state = [0 for i in range(SUBTERRANEAN_SIZE)]
+
+    def round(self):
+        # Chi step
+        self.state = [self.state[i] ^ ((1 ^ self.state[(i+1) % SUBTERRANEAN_SIZE])
+                                       & self.state[(i+2) % SUBTERRANEAN_SIZE]) for i in range(SUBTERRANEAN_SIZE)]
+        # Iota step
+        self.state[0] ^= 1
+        # Theta step
+        self.state = [self.state[i] ^ self.state[(i+3) % SUBTERRANEAN_SIZE] ^ self.state[(
+            i+8) % SUBTERRANEAN_SIZE] for i in range(SUBTERRANEAN_SIZE)]
+        # Pi step
+        self.state = [self.state[(12*i) % SUBTERRANEAN_SIZE]
+                      for i in range(SUBTERRANEAN_SIZE)]
+
+    def duplex(self, sigma):
+        # s <= R(s)
+        self.round()
+        # sbar <= sbar + sigma
+        index_j = 1
+        for i in range(len(sigma)):
+            self.state[index_j] ^= sigma[i]
+            index_j = (176*index_j) % SUBTERRANEAN_SIZE
+        # sbar <= sbar + (1||0*)
+        self.state[index_j] ^= 1
+
+    def extract(self):
+        value_out = [0 for i in range(32)]
+        # value_out <= extract
+        index_j = 1
+        for i in range(32):
+            value_out[i] = self.state[index_j] ^ self.state[SUBTERRANEAN_SIZE-index_j]
+            index_j = (176*index_j) % SUBTERRANEAN_SIZE
+        return value_out
+
+    def absorb_unkeyed(self, value_in):
+        i = 0
+        while(i < len(value_in) - 7):
+            self.duplex(value_in[i:i+8])
+            self.duplex([])
+            i += 8
+        self.duplex(value_in[i:])
+        self.duplex([])
+        return self.state
+
+    def absorb_keyed(self, value_in):
+        i = 0
+        while(i < len(value_in) - 31):
+            self.duplex(value_in[i:i+32])
+            i += 32
+        self.duplex(value_in[i:])
+
+    def absorb_encrypt(self, value_in):
+        # Y <= *
+        value_out = []
+        i = 0
+        while(i < len(value_in) - 31):
+            temp_value_state = self.extract()
+            value_out += [value_in[i+j] ^ temp_value_state[j]
+                          for j in range(32)]
+            self.duplex(value_in[i:i+32])
+            i += 32
+        temp_value_state = self.extract()
+        temp_value_out = [value_in[i+j] ^ temp_value_state[j]
+                          for j in range(len(value_in)-i)]
+        self.duplex(value_in[i:])
+        value_out += temp_value_out
+        return value_out
+
+    def absorb_decrypt(self, value_in):
+        # Y <= *
+        value_out = []
+        i = 0
+        while(i < len(value_in) - 31):
+            temp_value_state = self.extract()
+            temp_value_out = [value_in[i+j] ^ temp_value_state[j]
+                              for j in range(32)]
+            self.duplex(temp_value_out)
+            value_out += temp_value_out
+            i += 32
+        temp_value_state = self.extract()
+        temp_value_out = [value_in[i+j] ^ temp_value_state[j]
+                          for j in range(len(value_in)-i)]
+        self.duplex(temp_value_out)
+        value_out = value_out + temp_value_out
+        return value_out
+
+    def blank(self, r_calls):
+        for _ in range(r_calls):
+            self.duplex([])
+
+    def squeeze(self, size_l):
+        # Z <= *
+        Z = []
+        i = 0
+        while(i < size_l - 32):
+            temp_value_out = self.extract()
+            self.duplex([])
+            Z += temp_value_out
+            i += 32
+        temp_value_out = self.extract()
+        self.duplex([])
+        Z += temp_value_out[:(size_l-i)]
+        return Z
+
+    def xof_direct(self, message):
+        # S <= Subterranean()
+        state = self.initialize_state()
+        # Only one single message to absorb
+
+        self.absorb_unkeyed(message)
+        # S.blank(8)
+        self.blank(8)
+        # Z <= S.squeeze(l)
+        z = self.squeeze(self, self.CRYPTO_HASH_BYTES)
+        return z
+
+    def sae_direct_encrypt(self, key, nonce, associated_data, text, tag_length):
+        # S <= Subterranean()
+        self.initialize_state()
+        #print(bits_to_hex_string(state, False))
+        # S.absorb(K)
+        self.absorb_keyed(key)
+        #print(bits_to_hex_string(state, False))
+        # S.absorb(N)
+        self.absorb_keyed(nonce)
+        #print(bits_to_hex_string(state, False))
+        # S.blank(8)
+        self.blank(8)
+        #print(bits_to_hex_string(state, False))
+        # S.absorb(A,MAC)
+        self.absorb_keyed(associated_data)
+        #print(bits_to_hex_string(state, False))
+        # Y <= S.absorb(X,op)
+        new_text = self.absorb_encrypt(text)
+        #print(bits_to_hex_string(state, False))
+        # S.blank(8)
+        self.blank(8)
+        #print(bits_to_hex_string(state, False))
+        # T <= S.squeeze(tau)
+        new_tag = self.squeeze(tag_length)
+        #print(bits_to_hex_string(state, False))
+        return new_text, new_tag
+
+    def sae_direct_decrypt(self, key, nonce, associated_data, text, tag, tag_length):
+        # S <= Subterranean()
+        self.initialize_state()
+        # S.absorb(K)
+        self.absorb_keyed(key)
+        # S.absorb(N)
+        self.absorb_keyed(nonce)
+        # S.blank(8)
+        self.blank(8)
+        # S.absorb(A,MAC)
+        self.absorb_keyed(associated_data)
+        # Y <= S.absorb(X,op)
+        new_text = self.absorb_decrypt(text)
+        # S.blank(8)
+        self.blank(8)
+        # T <= S.squeeze(tau)
+        new_tag = self.squeeze(tag_length)
+        # if op = decrypt AND (tag != new_tag) then (Y,T) = (*,*)
+        if(tag != new_tag):
+            return False, None
+        return True, new_text
+
+    def encrypt(self, pt: bytes, ad: bytes, npub: bytes, key: bytes) -> Tuple[bytes, bytes]:
+        m_bits = bytearray_to_bits(pt)
+        ad_bits = bytearray_to_bits(ad)
+        npub_bits = bytearray_to_bits(npub)
+        k_bits = bytearray_to_bits(key)
+        c_bits, t_bits = self.sae_direct_encrypt(
+            k_bits, npub_bits, ad_bits, m_bits, self.CRYPTO_ABYTES*8)
+        return bits_to_bytearray(t_bits), bits_to_bytearray(c_bits)
+
+    def decrypt(self, ct: bytes, ad: bytes, npub: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
+        c_bits = bytearray_to_bits(ct)
+        t_prime_bits = bytearray_to_bits(tag)
+        ad_bits = bytearray_to_bits(ad)
+        npub_bits = bytearray_to_bits(npub)
+        k_bits = bytearray_to_bits(key)
+        success, m_bits = self.sae_direct_decrypt(
+            k_bits, npub_bits, ad_bits, c_bits, t_prime_bits)
+        return success, bits_to_bytearray(m_bits)
+
+    def hash(self, msg: bytes) -> bytes:
+        m_bits = bytearray_to_bits(msg)
+        hash_bits = self.xof_direct(m_bits, self.CRYPTO_HASH_BYTES*8)
+        return bits_to_bytearray(hash_bits)
+
+
+if __name__ == "__main__":
+    key = bytes.fromhex('000102030405060708090A0B0C0D0E0F')
+    npub = bytes.fromhex('000102030405060708090A0B0C0D0E0F')
+    pt = bytes.fromhex('0001')
+    ad = bytes.fromhex('0001')
+
+    cref = SubterraneanCref()
+    pyref = Subterranean()
+    tag, ct = pyref.encrypt(pt, ad, npub, key)
+    c_tag, c_ct = cref.encrypt(pt, ad, npub, key)
+    assert ct == c_ct, f"ct={ct.hex()} != c_ct={c_ct.hex()}"
+    assert tag == c_tag, f"ct={tag.hex()} != c_ct={c_tag.hex()}"
+    print(ct.hex().upper(), tag.hex().upper())

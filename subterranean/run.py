@@ -15,9 +15,9 @@ import toml
 parser = argparse.ArgumentParser()
 parser.add_argument('design')
 parser.add_argument('--gen', action='store_true')
-parser.add_argument('--debug', action='store_true')
-parser.add_argument('--xoodyak-debug', action='store_true')
+parser.add_argument('--debug', action='store_true', default=False)
 parser.add_argument('--gtkwave', action='store_true')
+parser.add_argument('--seed', default='123', help='random seed (passed to cocotb)')
 parser.add_argument('--tests', nargs='+', help='Test functions to run')
 
 args = parser.parse_args()
@@ -30,7 +30,8 @@ if not isinstance(designs, list):
 xeda_design = next(
     filter(lambda d: d['name'] == args.design, designs), None)
 rtl_settings = xeda_design['rtl']
-bsv_sources = [f for f in rtl_settings['sources'] if f.endswith('.bsv')]
+bluespec_sources = [f for f in rtl_settings['sources']
+                    if f.endswith('.bsv') or f.endswith('.bs')]
 
 if args.gtkwave:
     import vcd
@@ -59,18 +60,13 @@ if args.gtkwave:
             return sz, int(m.group(3), base)
         return None, int(v)
 
-    translations = {
-        # 'Lwc::OutputState': tr_enum('bin', 'SendHeader', 'SendData', 'VerifyTag', 'SendStatus'),
-        # 'Lwc::InputState': tr_enum('bin', 'GetPdiInstruction', 'GetSdiInstruction', 'GetPdiHeader', 'GetSdiHeader', 'GetPdiData', 'GetTag', 'EnqTagHeader', 'GetSdiData'),
-        # 'Xoodyak::InputState': tr_enum('bin', 'InIdle', 'InRecv', 'InFill'),
-        # 'Xoodyak::TransformState': tr_enum('bin', 'Absorb', 'Permute', 'Squeeze'),
-    }
+    translations = {}
 
-    for bsv_file in bsv_sources:
-        with open(bsv_file) as f:
+    for bluespec_file in bluespec_sources:
+        with open(bluespec_file) as f:
             content = f.read()
 
-            pkg_groups = next(re.finditer(r'\bpackage\s+(\w+)\s*;', content))
+            pkg_groups = next(re.finditer(r'\bpackage\s+(\w+)\b', content))
             pkg = pkg_groups.group(1)
 
             for td in typedef_enum_re.finditer(content):
@@ -96,7 +92,9 @@ if args.gtkwave:
     for tr_type_name, (datafmt, sz, tr) in translations.items():
         translate = vcd.gtkw.make_translation_filter(
             tr, datafmt=datafmt, size=sz)
-        with open(Path('gtkwave') / (tr_type_name + '.gwtr'), 'w') as f:
+        gtkwave_dir = Path('gtkwave')
+        gtkwave_dir.mkdir(exist_ok=True, parents=True)
+        with open(gtkwave_dir / (tr_type_name + '.gwtr'), 'w') as f:
             print(f"writing translation of {tr_type_name} into {f.name}")
             f.write(translate)
     sys.exit(0)
@@ -125,7 +123,7 @@ bsc_flags = [
     '-steps-warn-interval', '2000000',
     '-promote-warnings', 'ALL',
     '-show-compiles', '-show-module-use',
-    '-show-version', '-show-range-conflict',
+    '-show-version', '-show-range-conflict', '-show-module-use', '-show-method-conf',
     '-bdir', str(bsc_out),
     '-info-dir', str(bsc_out),
 ]
@@ -143,7 +141,7 @@ if not args.debug:
     bsc_flags += bsc_opt_flags
 else:
     bsc_flags += [
-        '-keep-fires', '-keep-inlined-boundaries'
+        '-keep-fires', '-keep-inlined-boundaries', '-show-schedule', '-sched-dot'
     ]
 
 
@@ -169,14 +167,14 @@ def get_used_mods(use_dir: Path, mod: str):
 
 
 def bsc_generate_verilog():
-    top_file = bsv_sources[-1]
+    top_file = bluespec_sources[-1]
     top = rtl_settings['top']
     if vout_dir.exists():
         shutil.rmtree(vout_dir)
     vout_dir.mkdir(exist_ok=False)
     bsc_out.mkdir(exist_ok=True)
 
-    for src in bsv_sources:
+    for src in bluespec_sources:
         #     cmd = [bsc_exec] + bsc_flags + ['-u', src]
         dirname, basename = os.path.split(src)
         if dirname and dirname not in lib_paths:
@@ -186,7 +184,13 @@ def bsc_generate_verilog():
     #     print(f'running {" ".join(cmd)}')
     #     subprocess.run(cmd, check=True)
 
-    for param_name, param_value in rtl_settings.get('parameters', {}).items():
+    bsc_defines = rtl_settings.get('parameters', {})
+
+    if args.debug:
+        bsc_defines['DEBUG']=1
+
+
+    for param_name, param_value in bsc_defines.items():
         bsc_flags.extend([
             '-D', f'{param_name}={param_value}'
         ])
@@ -265,9 +269,7 @@ def run_sim(top):
 
     cocotb_env = dict(COCOTB_REDUCED_LOG_FMT='1',
                       COCOTB_ANSI_OUTPUT='1',
-                      XOODYAK_DEBUG=str(
-                          int(bool(args.xoodyak_debug))),
-                      #    RANDOM_SEED='1234',
+                      RANDOM_SEED=args.seed,
                       )
 
     test_functions = args.tests
@@ -295,7 +297,7 @@ def run_sim(top):
                         '+verilator+seed+50', '+verilator+rand+reset+2'],
                     verilog_sources=verilog_sources,
                     toplevel=top,
-                    module="xoodyakTb"
+                    module=xeda_design['tb']['cocotb']['module']
                     )
 
     sim.run()

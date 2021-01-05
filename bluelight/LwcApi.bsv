@@ -53,7 +53,17 @@ function Bool headerEoT(Header w) = unpack(pack(w)[25]);
 function Bool headerEoI(Header w) = unpack(pack(w)[26]);
 
 
-module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
+module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput) (LwcIfc);
+  function Bit#(n) lwcSwapEndian(Bit#(n) word) provisos (Mul#(nbytes, 8, n), Div#(n, 8, nbytes));
+    return ccIsLittleEndian ? swapEndian(word) : word;
+  endfunction
+
+  // should be synthesized out when ccPadsOutput is True TODO: verify QoR
+  function CoreWord lwcPadWord(CoreWord word, Bit#(2) padarg);
+    return ccPadsOutput ? word : tpl_2(padWord(word, padarg, False));
+  endfunction
+
+
   BusReceiver#(CoreWord) pdiReceiver <- mkPipelineBusReceiver;
   BusReceiver#(CoreWord) sdiReceiver <- mkPipelineBusReceiver;
 
@@ -79,7 +89,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
   let inState  <- mkReg(GetPdiInstruction);
   let outState <- mkReg(SendHeader);
 
-  let doSender <- mkBusSenderWL(0);
+  let doSender <- mkBusSenderWL(?);
 
   let inWordCounterMsbZero = inWordCounter[13:1] == 0;
   let outCounterMsbZero = outCounter[13:1] == 0;
@@ -173,7 +183,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
 
     let lot = last_of_seg && inSegEoT;
 
-    cryptoCore.bdi.enq( BdIO {word: swapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
+    cryptoCore.bdi.enq( BdIO {word: lwcSwapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
 
     if (last_of_seg) inState <=  GetPdiInstruction;
   endrule
@@ -187,7 +197,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     let last_of_seg = inWordCounterMsbZero && ((inWordCounter[0] == 0) || (finalRemainBytes == 0));
     let lot = last_of_seg && inSegEoT;
 
-    cryptoCore.bdi.enq( BdIO {word: swapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
+    cryptoCore.bdi.enq( BdIO {word: lwcSwapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
 
     if (last_of_seg) begin
       if (inSegEoT && inSegType == Plaintext)
@@ -267,7 +277,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     match tagged BdIO {word:.word, lot:.lot} = cryptoCore.bdo.first;
     outCounter <= outCounter - 1;
 
-    let sw = swapEndian(word);
+    let sw = lwcSwapEndian(word);
 
     // $display("Verifytag got tag:%h core:%h", intag, sw);
 
@@ -285,8 +295,8 @@ module mkLwc#(CryptoCoreIfc cryptoCore) (LwcIfc);
     cryptoCore.bdo.deq;
     
     match tagged BdIO {word:.word, lot:.lot, padarg: .padarg} = cryptoCore.bdo.first;
-    match {.padded, .pw} = padWord(word, padarg, False);
-    doSender.in.enq(CoreWordWithLast { data: swapEndian(lot ? pw : word), last: False} );
+    let pw = lwcPadWord(word, padarg);
+    doSender.in.enq(CoreWordWithLast { data: lwcSwapEndian(lot ? pw : word), last: False} );
     let last_of_seg = outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0));
     if (last_of_seg) begin
       if (outSegLast)

@@ -1,0 +1,62 @@
+-- ====================================================================================================================
+-- Copyright © 2021 Kamyar Mohajerani. All Rights Reserved.
+-- ====================================================================================================================
+
+package SubterraneanDefs (
+    SubterraneanSize, Substate,
+    round, multiplicativeSubgroup
+    ) where
+
+import Vector
+import List
+-- ====================================================================================================================
+import CryptoCore
+import Utils
+
+type SubterraneanSize = 257
+type Substate = Bit SubterraneanSize
+
+-- ====================================================================================================================
+-- if1 :: Bool -> Action -> Action
+-- if1 b a = if (b) then a else noAction
+
+rotateRight :: (Add 1 a__ m) => Bit m -> Integer -> Bit m
+rotateRight s 0 = s
+rotateRight s n = rotateRight ((lsb s) ++ (truncateLSB s)) (n-1)
+
+round :: Substate -> Substate
+round s = 
+    let chi :: Substate -> Substate
+        chi sc = sc ^ ((invert (sc `rotateRight` 1)) & (sc `rotateRight` 2)) 
+
+        iota :: Substate -> Substate
+        iota si = (truncateLSB si) ++ (invert (lsb si))
+
+        theta :: Substate -> Substate
+        theta st = st ^ (st `rotateRight` 3) ^ (st `rotateRight` 8)
+
+        -- Too slow! Using the BSV version in `Utils.bsv`
+        -- pi :: Substate -> Substate
+        -- pi sp = 
+        --     let spv :: Vector SubterraneanSize (Bit 1) = unpack sp
+        --     in pack (genWith (\i -> (spv !! (i*12 % valueOf SubterraneanSize))))
+    in pi (theta (iota (chi s)))
+
+multiplicativeSubgroup :: Vector 33 Integer
+multiplicativeSubgroup = 
+    tpl_2 (mapAccumL (\acc -> \_ -> (acc * 176 % (valueOf SubterraneanSize), acc) ) 1 newVector)
+    -- let msgGen :: Integer -> List Integer
+    --     msgGen 0 = Nil <: 1
+    --     msgGen n = 
+    --         let lst = msgGen (n-1)
+    --         in lst <: ((List.last lst) * 176 % (valueOf SubterraneanSize))
+    -- in toVector (msgGen 32)
+
+-- Too slow! Using the BSV version
+-- addWord :: Substate -> Bit 33 -> Substate
+-- addWord s w = 
+--     let mapper :: Integer -> Bit 1
+--         mapper i = case (findElem i multiplicativeSubgroup) of
+--                     Valid idx -> s[i:i] ^ w[idx:idx]
+--                     Invalid   -> s[i:i]
+--     in pack (map mapper genList)

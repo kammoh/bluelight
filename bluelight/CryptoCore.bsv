@@ -30,7 +30,9 @@ endinterface
 function FifoOut#(a) fifofToFifoOut(FIFOF#(a) fifo);
 return
   interface FifoOut#(a);
-    method Action deq = fifo.deq;
+    method Action deq if (fifo.notEmpty);
+      fifo.deq;
+    endmethod
     method Bool notEmpty = fifo.notEmpty;
     method a first = fifo.first;
   endinterface;
@@ -67,9 +69,9 @@ typedef enum {
 } CoreOpType deriving (Bits, Eq, FShow);
 
 typedef struct {
-  CoreWord word;  // data word
   Bool lot;       // last word of the type
   Bit#(2) padarg; // padding argument, number of valid bytes or 0 all valid
+  CoreWord word;  // data word
 } BdIO deriving (Bits, Eq);
 
 interface CryptoCoreIfc;
@@ -85,7 +87,7 @@ interface CryptoCoreIfc;
   interface FifoOut#(BdIO) bdo;
 endinterface
 
-function Bit#(n) swapEndian(Bit#(n) word) provisos (Mul#(nbytes, 8, n),Div#(n, 8, nbytes));
+function Bit#(n) swapEndian(Bit#(n) word) provisos (Mul#(nbytes, 8, n), Div#(n, 8, nbytes));
     Vector#(nbytes, Byte) v = toChunks(word);
     return pack(reverse(v));
 endfunction

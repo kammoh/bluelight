@@ -18,9 +18,11 @@ from cocotb.triggers import (First, Join, ReadOnly, RisingEdge, Timer)
 from .hw_api import Instruction, Segment, SegmentType, OpCode, Status
 from .utils import rand_bytes
 
+
 def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i+n]
+
 
 def show_messages(messages, width):
     num_messages = len(messages)
@@ -52,7 +54,8 @@ class ForkJoinBase:
                 timer = Timer(timeout)
                 first = await First(timer, self._forked)
                 if first is timer:
-                    self.log.error(f"Joining {self.name} timed out! (timeout={timeout})")
+                    self.log.error(
+                        f"Joining {self.name} timed out! (timeout={timeout})")
                     raise TestFailure(f"timeout")
             else:
                 await Join(self._forked)
@@ -109,7 +112,7 @@ class ValidReadyDriver(ForkJoinBase):
 
 
 class ValidReadyMonitor(ForkJoinBase):
-    def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0) -> None:
+    def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0, min_stalls=None) -> None:
         super().__init__()
         self._valid = getattr(dut, f'{name}_valid')
         self._ready = getattr(dut, f'{name}_ready')
@@ -125,6 +128,7 @@ class ValidReadyMonitor(ForkJoinBase):
         self._debug = debug
         self.queue: Queue[List[int]] = Queue()
         self.max_stalls = max_stalls
+        self.min_stalls = min_stalls if min_stalls is not None else -self.max_stalls
         self._ready.setimmediatevalue(0)
 
     # TODO just single "data" field implemented
@@ -143,10 +147,11 @@ class ValidReadyMonitor(ForkJoinBase):
         while not self.queue.empty():
             message = self.queue.get()
             num_verified_messages += 1
-            self.log.info(f"Verifying message #{num_verified_messages} ({len(message)} words) on '{self.name}'")
+            self.log.info(
+                f"Verifying message #{num_verified_messages} ({len(message)} words) on '{self.name}'")
             for exp in message:
                 # TODO add custom ready generator
-                r = random.randint(-self.max_stalls, self.max_stalls)
+                r = random.randint(self.min_stalls, self.max_stalls)
                 if r > 0:
                     self._ready <= 0
                     for _ in range(r):
@@ -194,7 +199,7 @@ class ValidReadyMonitor(ForkJoinBase):
 
 
 class Tb:
-    def __init__(self, dut: SimHandleBase, input_buses: List[str], output_buses: List[str], debug=False, clk_period=10, max_in_stalls=0, max_out_stalls=0) -> None:
+    def __init__(self, dut: SimHandleBase, input_buses: List[str], output_buses: List[str], debug=False, clk_period=10, max_in_stalls=0, max_out_stalls=0, min_out_stalls=0) -> None:
         self.dut = dut
         self.log = dut._log
         self.started = False
@@ -210,7 +215,7 @@ class Tb:
         self.drivers = SimpleNamespace(
             **{k: ValidReadyDriver(dut, k, self.clock, debug=debug, max_stalls=max_in_stalls) for k in input_buses})
         self.monitors = SimpleNamespace(**{bus_name: ValidReadyMonitor(
-            dut=dut, name=bus_name, clock=self.clock, debug=debug, max_stalls=max_out_stalls) for bus_name in output_buses})
+            dut=dut, name=bus_name, clock=self.clock, debug=debug, max_stalls=max_out_stalls, min_stalls=min_out_stalls) for bus_name in output_buses})
 
         self._forked_clock = None
 
@@ -246,10 +251,10 @@ class Tb:
 
 
 class LwcTb(Tb):
-    def __init__(self, dut: SimHandleBase, debug=False, max_in_stalls=0, max_out_stalls=0) -> None:
+    def __init__(self, dut: SimHandleBase, debug=False, max_in_stalls=0, max_out_stalls=0, min_out_stalls=0) -> None:
 
         super().__init__(dut=dut,
-                         input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=max_in_stalls, max_out_stalls=max_out_stalls)
+                         input_buses=['pdi', 'sdi'], output_buses=['do'], debug=debug, max_in_stalls=max_in_stalls, max_out_stalls=max_out_stalls, min_out_stalls=min_out_stalls)
 
         self.pdi: ValidReadyDriver = self.drivers.pdi
         self.sdi: ValidReadyDriver = self.drivers.sdi
@@ -326,14 +331,13 @@ class LwcTb(Tb):
             *Segment.segmentize(SegmentType.DIGEST, digest, last=1, eot=1, eoi=0))
 
 
-
 class LwcRefCheckerTb(LwcTb):
-    def __init__(self, dut: SimHandleBase, ref: Union[LwcAead, LwcHash], debug, max_in_stalls, max_out_stalls) -> None:
+    def __init__(self, dut: SimHandleBase, ref: Union[LwcAead, LwcHash], debug, max_in_stalls, max_out_stalls, min_out_stalls=None, supports_hash=True) -> None:
         super().__init__(dut, debug=debug, max_in_stalls=max_in_stalls,
-                         max_out_stalls=max_out_stalls)
+                         max_out_stalls=max_out_stalls, min_out_stalls=min_out_stalls)
         self.debug = debug
-        
         self.ref = ref
+        self.supports_hash = supports_hash
         self.rand_inputs = not debug
 
     def gen_inputs(self, numbytes):
@@ -388,5 +392,4 @@ class LwcRefCheckerTb(LwcTb):
         await self.join_monitors(timeout)
         t1 = get_sim_time()
         cycles = (t1 - t0) // self.clock_period
-        return cycles - 1 # consistent with VHDL TB
-
+        return cycles - 1  # consistent with VHDL TB

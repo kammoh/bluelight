@@ -12,8 +12,8 @@ import Connectable::*;
 import FIFO::*;
 
 typedef struct {
-  a    data;
   Bool last;
+  a    data;
 } DataLast#(type a) deriving (Bits, Eq, FShow);
 
 

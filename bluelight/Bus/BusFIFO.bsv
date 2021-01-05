@@ -21,7 +21,7 @@ import SpecialFIFOs::*;
 
 module mkBusSenderWL#(a dflt) (BusSenderWL#(a)) provisos(Bits#(a, sa));
 
-   FIFOF#(DataLast#(a)) fifof <- mkDFIFOF(DataLast{data:dflt, last: False});
+   FIFOF#(DataLast#(a)) fifof <- mkDFIFOF(DataLast{last: False, data:dflt});
    let data_wire = fifof.first;
 
    PulseWire deq_ready <- mkPulseWire;
