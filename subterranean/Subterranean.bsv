@@ -52,8 +52,9 @@ function Bit#(32) extractWord(Substate s);
 endfunction
 
 // ====================================================================================================================
-
-(* synthesize *)
+`ifdef DEBUG
+// (* synthesize *)
+`endif
 module mkSubterranean(CryptoCoreIfc);
     
     // ================================================== Instances ===================================================
@@ -79,8 +80,10 @@ module mkSubterranean(CryptoCoreIfc);
 
     (* fire_when_enabled *)
     rule rl_duplex if (!initSubstate);
+        `ifdef DEBUG
         $writeh ("duplex w=", rwDuplex);
         dumpState(" | before round:", substate);
+        `endif
 
         let w = {rwDuplex[31:1], sqz ? 0 : rwDuplex[0]};
         let xw = extractWord(substate);
@@ -93,7 +96,7 @@ module mkSubterranean(CryptoCoreIfc);
     endrule
 
     (* fire_when_enabled *)
-    rule rl_blank_squeeze if (state == Blank || (state == Squeeze && outFIFO.notFull));
+    rule rl_blank_squeeze if ((state == Blank || state == Squeeze) && outFIFO.notFull);
         rwDuplex <= 1;
         if (blankCounter == 0) begin
             retState <= Idle;
@@ -151,7 +154,7 @@ module mkSubterranean(CryptoCoreIfc);
 
             if (extractWhileAbsorb)
                 extract.send();
-                
+
             if (decrypt)
                 dec.send();
             

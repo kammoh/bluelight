@@ -107,14 +107,16 @@ class Subterranean(LwcAead, LwcHash):
         self.round()
         self.dump_state(f"after round")
         sigma1 = sigma + [1]
-        print(f"adding {bits_to_hex(sigma1)}")
+        if self.debug:
+            print(f"adding {bits_to_hex(sigma1)}")
         for i in range(len(sigma1)):
             self.state[MultiplicativeSubgroup[i]] ^= sigma1[i]
         self.dump_state(f"after duplex ({len(sigma)} bits)")
 
     def extract(self):
         r = [self.state[j] ^ self.state[SUBTERRANEAN_SIZE-j] for i in range(32) for j in (MultiplicativeSubgroup[i],)]
-        print(f"extraced {bits_to_hex(r)}")
+        if self.debug:
+            print(f"extraced {bits_to_hex(r)}")
         return r
 
     def absorb_unkeyed(self, value_in):
