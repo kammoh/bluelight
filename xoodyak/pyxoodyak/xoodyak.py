@@ -8,8 +8,20 @@
 import sys
 from enum import Enum, auto
 from typing import Any, Optional, Tuple
+from pathlib import Path
+import os
+import inspect
 
-from .lwc_api import LwcAead, LwcHash
+from .lwc_api import LwcAead, LwcHash, LwcCffi
+
+SCRIPT_DIR = os.path.realpath(os.path.dirname(
+    inspect.getfile(inspect.currentframe())))
+
+class XoodyakCref(LwcCffi, LwcAead, LwcHash):
+    aead_algorithm = 'xoodyakv1'
+    hash_algorithm = 'xoodyakv1'
+    root_cref_dir = Path(SCRIPT_DIR).parent / 'cref'
+
 
 Xoodyak_f_bPrime = 48
 Xoodyak_Rhash = 16

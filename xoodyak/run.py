@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from math import ceil, log2
-from typing import Any, List
 from cocotb_test.simulator import Verilator
 
 from pathlib import Path

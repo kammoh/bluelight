@@ -98,6 +98,17 @@ module mkXoodyak(CryptoCoreIfc);
     return tuple2(nextState, squeeze ? take(currentState) : take(inputXorState));
   endfunction
 
+  function Bit#(4) padargToFlag(Bool lot, Bit#(2) padarg);
+    return case(tuple2(lot, padarg)) matches
+      {True, 2'd1} : 4'b0001;
+      {True, 2'd2} : 4'b0011;
+      {True, 2'd3} : 4'b0111;
+      default      : 4'b1111;
+    endcase;
+  endfunction
+
+  // ==================================================== Rules =====================================================
+
   // either absorb, absorb+squeeze or just squeeze
   (* fire_when_enabled *)
   rule rl_absorb_squeeze if (inState == InFull && xState == Absorb && !piso.notEmpty); // TODO decouple piso
@@ -190,16 +201,7 @@ module mkXoodyak(CryptoCoreIfc);
       inState <= InFull;
   endrule
 
-  function Bit#(4) padargToFlag(Bool lot, Bit#(2) padarg);
-    return case(tuple2(lot, padarg)) matches
-      {True, 2'd1} : 4'b0001;
-      {True, 2'd2} : 4'b0011;
-      {True, 2'd3} : 4'b0111;
-      default      : 4'b1111;
-    endcase;
-  endfunction
-
-  // ******************************** Methods and subinterfaces ********************************
+  // ================================================== Interfaces ==================================================
   method Action process(SegmentType typ, Bool empty) if (inState == InIdle);
     inRecvType     <=   typ;
     inFirstBlock   <=  True;

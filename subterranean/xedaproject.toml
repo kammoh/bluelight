@@ -1,0 +1,29 @@
+[[project]]
+name = "Subterranean 2.0 LWC in Bluespec"
+description = "BlueLight implementations"
+author = "Kamyar Mohajerani"
+
+[[design]]
+name = 'Subterranean'
+
+[design.rtl]
+sources = [
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
+    'SubterraneanDefs.bs',
+    'Utils.bsv',
+    'Subterranean.bsv',
+    'SubterraneanLwc.bs',
+]
+top = 'lwc'
+parameters.TOP_MODULE_NAME = 'lwc'
+
+[design.tb]
+sources = [
+    "subterraneanTb.py"
+]
+cocotb.module = 'subterraneanTb'
+

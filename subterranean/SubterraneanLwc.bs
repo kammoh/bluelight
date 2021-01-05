@@ -1,0 +1,12 @@
+package SubterraneanLwc where
+
+import LwcApi
+import CryptoCore
+import Subterranean
+
+{-# properties lwc = {CLK = "clk", RSTN = "rst"} #-}
+lwc :: Module LwcIfc
+lwc = module
+  subterranean <- mkSubterranean
+  lwcApi <- mkLwc subterranean True False
+  return lwcApi

@@ -15,7 +15,7 @@ import Xoodyak :: *;
    default_reset = "rst" *)
 module `TOP_MODULE_NAME (LwcIfc);
   let xoodyak <- mkXoodyak;
-  let lwc <- mkLwc(xoodyak);
+  let lwc <- mkLwc(xoodyak, True, False);
   return lwc;
 endmodule
 
