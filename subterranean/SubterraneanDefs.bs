@@ -8,7 +8,6 @@ package SubterraneanDefs (
     ) where
 
 import Vector
-import List
 -- ====================================================================================================================
 import CryptoCore
 import Utils

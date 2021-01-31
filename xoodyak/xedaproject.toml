@@ -8,11 +8,11 @@ name = 'Xoodyak'
 
 [design.rtl]
 sources = [
-    'bluelight/Bus/BusDefines.bsv',
-    'bluelight/Bus/BusFIFO.bsv',
-    'bluelight/Bus/Bus.bsv',
-    'bluelight/CryptoCore.bsv',
-    'bluelight/LwcApi.bsv',
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',
@@ -71,11 +71,11 @@ name = 'Xoodyak2x'
 
 [design.rtl]
 sources = [
-    'bluelight/Bus/BusDefines.bsv',
-    'bluelight/Bus/BusFIFO.bsv',
-    'bluelight/Bus/Bus.bsv',
-    'bluelight/CryptoCore.bsv',
-    'bluelight/LwcApi.bsv',
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',

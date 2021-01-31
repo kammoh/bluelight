@@ -9,6 +9,8 @@ import Vector::*;
 `endif
 
 typedef Bit#(`IO_WIDTH) CoreWord;
+typedef Bit#(8) Byte;
+typedef Bit#(2) PadArg;
 
 // TODO FIXME as cryptoCore parameter or constant? `define?
 // used in LwcApi
@@ -38,7 +40,7 @@ return
   endinterface;
 endfunction
 
-function Tuple2#(Bool, CoreWord) padWord(CoreWord word, Bit#(2) padarg, Bool padOne);
+function Tuple2#(Bool, CoreWord) padWord(CoreWord word, PadArg padarg, Bool padOne);
   return case (padarg)
     2'd0    : tuple2(False, word);
     2'd1    : tuple2(True, {zeroExtend(pack(padOne)), word[7:0]});
@@ -46,9 +48,6 @@ function Tuple2#(Bool, CoreWord) padWord(CoreWord word, Bit#(2) padarg, Bool pad
     default : tuple2(True, {zeroExtend(pack(padOne)), word[23:0]});
   endcase;
 endfunction
-
-typedef Bit#(8) Byte;
-
 
 typedef enum {
   AD          = 4'b0001,
@@ -70,7 +69,7 @@ typedef enum {
 
 typedef struct {
   Bool lot;       // last word of the type
-  Bit#(2) padarg; // padding argument, number of valid bytes or 0 all valid
+  PadArg padarg; // padding argument, number of valid bytes or 0 all valid
   CoreWord word;  // data word
 } BdIO deriving (Bits, Eq);
 
@@ -87,7 +86,7 @@ interface CryptoCoreIfc;
   interface FifoOut#(BdIO) bdo;
 endinterface
 
-function Bit#(n) swapEndian(Bit#(n) word) provisos (Mul#(nbytes, 8, n), Div#(n, 8, nbytes));
+function Bit#(n) swapEndian(Bit#(n) word) provisos (Mul#(nbytes, SizeOf#(Byte), n), Div#(n, SizeOf#(Byte), nbytes));
     Vector#(nbytes, Byte) v = toChunks(word);
     return pack(reverse(v));
 endfunction

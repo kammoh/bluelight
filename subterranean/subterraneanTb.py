@@ -93,6 +93,8 @@ async def blanket_test_simple(dut: SimHandleBase):
 @cocotb.test()
 async def randomized_tests(dut: SimHandleBase):
 
+    supports_hash = False
+
     debug = os.environ.get('SUBTERRANEAN_DEBUG', False)
     # debug = True
 
@@ -106,7 +108,7 @@ async def randomized_tests(dut: SimHandleBase):
         dut, debug=debug, max_in_stalls=5, max_out_stalls=5)
 
     sizes = [0, 1, 15, 16, 17,  23, 24, 25, 31, 32, 33, 43, 44, 45, 47, 48, 49, 61, 64, 65, 67] + \
-        [randint(2, 300) for _ in range(30)]
+        [randint(2, 500) for _ in range(30)]
 
     sizes = list(set(sizes))  # unique
     random.shuffle(sizes)
@@ -116,7 +118,7 @@ async def randomized_tests(dut: SimHandleBase):
     await tb.start()
 
     for size1, size2 in itertools.product(sizes, sizes2):
-        op = randint(0, 2)
+        op = randint(0, 2 if supports_hash else 1)
         if (op == 0):
             await tb.xenc_test(ad_size=size1, pt_size=size2)
         elif (op == 1):

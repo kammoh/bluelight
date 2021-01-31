@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import inspect
 from math import ceil, log2
 from cocotb_test.simulator import Verilator
 
@@ -12,12 +13,19 @@ import argparse
 
 import toml
 
+SCRIPT_DIR = os.path.realpath(os.path.dirname(
+    inspect.getfile(inspect.currentframe())))
+
+sys.path.append(SCRIPT_DIR)
+sys.path.append(os.path.curdir)
+
 parser = argparse.ArgumentParser()
 parser.add_argument('design')
 parser.add_argument('--gen', action='store_true')
 parser.add_argument('--debug', action='store_true', default=False)
 parser.add_argument('--gtkwave', action='store_true')
-parser.add_argument('--seed', default='123', help='random seed (passed to cocotb)')
+parser.add_argument('--seed', default='123',
+                    help='random seed (passed to cocotb)')
 parser.add_argument('--tests', nargs='+', help='Test functions to run')
 
 args = parser.parse_args()
@@ -121,9 +129,8 @@ verilog_paths = [f'{BLUESPEC_PREFIX}/lib/Verilog']
 bsc_flags = [
     '-steps-max-intervals', '6000000',
     '-steps-warn-interval', '2000000',
-    '-promote-warnings', 'ALL',
     '-show-compiles', '-show-module-use',
-    '-show-version', '-show-range-conflict','-show-method-conf',
+    '-show-version', '-show-range-conflict', '-show-method-conf',
     '-bdir', str(bsc_out),
     '-info-dir', str(bsc_out),
 ]
@@ -131,24 +138,21 @@ bsc_flags = [
 
 if args.debug:
     bsc_flags += [
-        # '-keep-fires',
-        # '-keep-inlined-boundaries',
+        '-keep-fires',
+        '-keep-inlined-boundaries',
         # '-show-schedule',
         # '-sched-dot',
-        '-sat-yices',
-        '-remove-unused-modules',
-        '-remove-false-rules',
-        '-remove-starved-rules',
-        '-no-keep-fires',
-        '-no-keep-inlined-boundaries',
-        '-aggressive-conditions',  # saw suspicious behavior with this
-        '-O',
-        '-no-show-timestamps', # regenerated files should be the same
-        '-opt-undetermined-vals',
-        '-unspecified-to', 'X',
+        # '-sat-yices',
+        # '-remove-unused-modules',
+        # '-remove-false-rules',
+        # '-remove-starved-rules',
+        # '-no-show-timestamps', # regenerated files should be the same
+        # '-opt-undetermined-vals',
+        # '-unspecified-to', 'X',
     ]
 else:
     bsc_flags += [
+        # '-promote-warnings', 'ALL',
         '-remove-dollar',
         '-sat-yices',
         '-remove-unused-modules',
@@ -210,8 +214,7 @@ def bsc_generate_verilog():
 
     if args.debug:
         print("DEBUG!")
-        bsc_defines['DEBUG']=1
-
+        bsc_defines['DEBUG'] = 1
 
     for param_name, param_value in bsc_defines.items():
         bsc_flags.extend([

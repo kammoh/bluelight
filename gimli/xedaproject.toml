@@ -1,0 +1,40 @@
+[[project]]
+name = "Gimli"
+description = "Gimli AEAD+HASH"
+author = "Kamyar Mohajerani"
+
+[[design]]
+name = 'GimliCipher'
+
+[design.rtl]
+sources = [
+    'GimliCipher.bsv',
+]
+top = 'mkGimliCipher'
+
+[design.tb]
+sources = ["cipherTb.py"]
+cocotb = { module = 'cipherTb' }
+
+[[design]]
+name = 'Gimli'
+
+[design.rtl]
+sources = [
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
+    'GimliCipher.bsv',
+    'InputLayer.bsv',
+    'PISO.bsv',
+    'Gimli.bsv',
+    'GimliLwc.bsv',
+]
+top = 'lwc'
+
+
+[design.tb]
+sources = ["gimliTb.py"]
+cocotb = { module = 'gimliTb' }

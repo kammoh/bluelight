@@ -7,7 +7,7 @@ import random
 from queue import Queue
 
 from cocotb.utils import get_sim_time
-from xoodyak.pyxoodyak.lwc_api import LwcAead, LwcHash
+from .lwc_api import LwcAead, LwcHash
 
 import cocotb
 from cocotb.clock import Clock
@@ -204,6 +204,7 @@ class Tb:
         self.log = dut._log
         self.started = False
         if hasattr(dut, 'rst_n'):
+            print("rst_n port detected. Using active-low reset!")
             self.reset_val = 0
             self.reset = dut.rst_n
         else:
@@ -222,7 +223,7 @@ class Tb:
     async def reset_dut(self, duration):
         self.reset <= self.reset_val
         await Timer(duration)
-        self.reset <= ~(self.reset_val)
+        self.reset <= (not self.reset_val)
         await self.clock_edge
         self.log.debug("Reset complete")
 
@@ -349,7 +350,7 @@ class LwcRefCheckerTb(LwcTb):
         npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
         ad = self.gen_inputs(ad_size)
         pt = self.gen_inputs(pt_size)
-        tag, ct = self.ref.encrypt(pt, ad, npub, key)
+        ct, tag = self.ref.encrypt(pt, ad, npub, key)
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
                   f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
@@ -360,7 +361,7 @@ class LwcRefCheckerTb(LwcTb):
         npub = self.gen_inputs(self.ref.CRYPTO_NPUBBYTES)
         ad = self.gen_inputs(ad_size)
         pt = self.gen_inputs(ct_size)
-        tag, ct = self.ref.encrypt(pt, ad, npub, key)
+        ct, tag = self.ref.encrypt(pt, ad, npub, key)
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
                   f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')

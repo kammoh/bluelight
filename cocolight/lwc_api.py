@@ -1,3 +1,7 @@
+from typeguard import typechecked
+from typeguard.importhook import install_import_hook
+install_import_hook('lwc_api')
+
 import sys
 from typing import Tuple
 import os
@@ -5,10 +9,10 @@ import inspect
 from cffi import FFI
 import importlib
 
-from typeguard import typechecked
-
 # Proposed Python LWC API
 # inspired from https://csrc.nist.gov/CSRC/media/Projects/Lightweight-Cryptography/documents/final-lwc-submission-requirements-august2018.pdf
+
+tag_type = bytes
 
 class LwcAead:
     CRYPTO_KEYBYTES = None
@@ -17,11 +21,13 @@ class LwcAead:
     CRYPTO_ABYTES = None
 
     @typechecked
-    def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
+    def encrypt(self, pt: bytes, ad: bytes, npub: bytes, key: bytes) -> Tuple[bytes, tag_type]:
+        """ returns ct, tag """
         ...
 
     @typechecked
-    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
+    def decrypt(self, ct: bytes, ad: bytes, npub: bytes, key: bytes, tag: tag_type) -> bytes:
+        """ returns pt if tag matches o/w None """
         ...
 
 
@@ -33,9 +39,7 @@ class LwcHash:
         ...
 
 
-
 # Python wrapper of C implementations, provides mechanism for building cpython native libs
-
 
 SCRIPT_DIR = os.path.realpath(os.path.dirname(
     inspect.getfile(inspect.currentframe())))
@@ -60,15 +64,10 @@ class LwcCffi():
     CRYPTO_ABYTES = None
     CRYPTO_HASH_BYTES = None
 
-    @staticmethod
-    def build_cffi(root_cref_dir, algorithm, cffi_build_dir, DEBUG_LEVEL=0):
+    def build_cffi(self, root_cref_dir, algorithm, cffi_build_dir, DEBUG_LEVEL=0):
         assert algorithm
         assert root_cref_dir
-        headers = {
-            'hash':
-            '''
-        int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);
-        ''', 'aead': '''
+        headers = {'aead': '''
         int crypto_aead_encrypt(
             unsigned char *c, unsigned long long *clen,
             const unsigned char *m, unsigned long long mlen,
@@ -86,9 +85,12 @@ class LwcCffi():
             const unsigned char *k
             );
         '''
-        }
+                   }
+        if self.hash_algorithm:
+            headers['hash'] = 'int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);\n'
 
         for op, header in headers.items():
+            print(header)
             ffibuilder = FFI()
             cref_dir = root_cref_dir / f'crypto_{op}' / algorithm / 'ref'
             hdr_file = cref_dir / f"crypto_{op}.h"
@@ -140,7 +142,10 @@ class LwcCffi():
             assert self.aead_ffi
 
             if self.hash_algorithm:
-                spec = importlib.util.find_spec(f'cffi_{self.aead_algorithm}_hash')
+                spec = importlib.util.find_spec(
+                    f'cffi_{self.aead_algorithm}_hash')
+                if not spec:
+                    raise ModuleNotFoundError
                 hash_module = spec.loader.load_module()
                 self.hash_lib = hash_module.lib
                 self.hash_ffi = hash_module.ffi
@@ -159,12 +164,13 @@ class LwcCffi():
             importlib.invalidate_caches()
             sys.path.append(os.path.join(os.getcwd(), self.cffi_build_dir))
             print(
-            f'adding {os.path.join(os.getcwd(), self.cffi_build_dir)} to sys.path')
-            
+                f'adding {os.path.join(os.getcwd(), self.cffi_build_dir)} to sys.path')
+
             try:
                 try_imports()
             except ModuleNotFoundError as e:
-                print("You probably just need to run Python again. [Hopefully will be fixed soon] ")
+                print(
+                    "You probably just need to run Python again. [Hopefully will be fixed soon] ")
                 raise e
 
         self.CRYPTO_KEYBYTES = self.aead_lib.CRYPTO_KEYBYTES
@@ -174,34 +180,39 @@ class LwcCffi():
         if self.hash_lib:
             self.CRYPTO_HASH_BYTES = self.hash_lib.CRYPTO_BYTES
 
-    def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
+    @typechecked
+    def encrypt(self, pt: bytes, ad: bytes, npub: bytes, key: bytes) -> Tuple[bytes, tag_type]:
+        """ returns tag, ct """
         assert len(key) == self.aead_lib.CRYPTO_KEYBYTES
-        assert len(nonce) == self.aead_lib.CRYPTO_NPUBBYTES
+        assert len(npub) == self.aead_lib.CRYPTO_NPUBBYTES
         ct = bytes(len(pt) + self.aead_lib.CRYPTO_ABYTES)
         ct_len = self.aead_ffi.new('unsigned long long*')
 
         ret = self.aead_lib.crypto_aead_encrypt(ct, ct_len, pt, len(
-            pt), ad, len(ad), self.aead_ffi.NULL, nonce, key)
+            pt), ad, len(ad), self.aead_ffi.NULL, npub, key)
         assert ret == 0
         assert ct_len[0] == len(ct)
         tag = ct[-self.CRYPTO_ABYTES:]
         ct = ct[:-self.CRYPTO_ABYTES]
-        return tag, ct
-
-    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
+        return ct, tag
+    
+    @typechecked
+    def decrypt(self, ct: bytes, ad: bytes, npub: bytes, key: bytes, tag: bytes) -> bytes:
         ct_len = len(ct)
         assert len(key) == self.aead_lib.CRYPTO_KEYBYTES
-        assert len(nonce) == self.aead_lib.CRYPTO_NPUBBYTES
+        assert len(npub) == self.aead_lib.CRYPTO_NPUBBYTES
         pt = bytes(ct_len)
-        assert len(tag) == self.CRYPTO_ABYTES, f"Tag should be {self.CRYPTO_ABYTES} bytes"
+        assert len(
+            tag) == self.CRYPTO_ABYTES, f"Tag should be {self.CRYPTO_ABYTES} bytes"
         pt_len = self.aead_ffi.new('unsigned long long*')
         ct_tag = self.aead_ffi.from_buffer(ct + tag)
         ret = self.aead_lib.crypto_aead_decrypt(
-            pt, pt_len, self.aead_ffi.NULL, ct_tag, ct_len + self.CRYPTO_ABYTES, ad, len(ad), nonce, key)
+            pt, pt_len, self.aead_ffi.NULL, ct_tag, ct_len + self.CRYPTO_ABYTES, ad, len(ad), npub, key)
         assert (ret != 0 and pt_len[0] == 0) or pt_len[0] == ct_len
 
-        return ret == 0, pt
+        return pt if ret == 0 else None
 
+    @typechecked
     def hash(self, msg: bytes) -> bytes:
         out = bytes(self.hash_lib.CRYPTO_BYTES)
         ret = self.hash_lib.crypto_hash(out, msg, len(msg))
