@@ -10,6 +10,7 @@ import Vector::*;
 
 typedef Bit#(`IO_WIDTH) CoreWord;
 typedef Bit#(8) Byte;
+typedef TDiv#(SizeOf#(CoreWord),SizeOf#(Byte)) CoreWordBytes;
 typedef Bit#(2) PadArg;
 
 // TODO FIXME as cryptoCore parameter or constant? `define?
