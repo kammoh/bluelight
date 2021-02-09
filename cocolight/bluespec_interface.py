@@ -1,12 +1,6 @@
 from cocolight.utils import rand_bytes
 from typing import Dict, Tuple
 from typeguard import typechecked
-import inspect
-import sys
-import os
-from pathlib import Path
-import cocotb
-from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject, NonHierarchyObject, SimHandleBase
 from cocotb.triggers import ClockCycles, GPITrigger, ReadOnly, ReadWrite, RisingEdge, _EdgeBase
 
@@ -23,9 +17,10 @@ class BsvBits(BsvType):
         self.bits = bits
 
     def pack(self, v: bytes) -> int:
+        mask = (1 << self.bits) - 1
         if isinstance(v, bytes):
-            return int.from_bytes(v, 'little')
-        return int(v)
+            v = int.from_bytes(v, 'little')
+        return int(v) & mask
 
 class BsvBool(BsvBits):
     def __init__(self) -> None:
@@ -37,24 +32,23 @@ class BsvStruct(BsvType):
         self.bits = 0
         for _, typ in struct_def.items():
             self.bits += typ.bits
-
-    def pack(self, **struct_values) -> int:
-        v = 0
+            
+    def pack(self, v: dict) -> int:
+        x = 0
         for name, typ in self.struct_def.items():
-            mask = (1 << typ.bits) - 1
-            sv = struct_values.get(name, 0)
-            if isinstance(sv, bytes):
-                sv = int.from_bytes(sv, 'little')
-            v = (v << typ.bits) | (sv & mask)
-        return v
+            sv = typ.pack(v.get(name, 0))
+            x = (x << typ.bits) | sv
+        return x
 
 class BsvSignal:
+    @typechecked
     def __init__(self, handle: NonHierarchyObject, typ: BsvType) -> None:
         self.handle = handle
         self.typ: BsvType = typ
 
 class ActionMethod:
-    def __init__(self, prefix: str, dut: HierarchyObject, args: Dict[str, BsvType] = {}, clock_edge: GPITrigger = None) -> None:
+    @typechecked
+    def __init__(self, prefix: str, dut: HierarchyObject, args: Dict[str, BsvType], clock_edge: GPITrigger) -> None:
         self.prefix = prefix
         self.dut = dut
         self.log = dut._log
@@ -62,7 +56,7 @@ class ActionMethod:
         def sig(s: str, notexist = None, check = False):
             if not hasattr(dut, s):
                 if check:
-                    raise AttributeError
+                    raise AttributeError(f"{s} not found")
                 return notexist
             return getattr(dut, s)
 

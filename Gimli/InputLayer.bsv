@@ -15,7 +15,7 @@ function Bit#(4) padargToValids(Bool pad, PadArg padarg);
     endcase;
 endfunction
 
-module mkInputLayer(InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWordBytes, n_bytes), Add#(a__, 4, n_bytes), Add#(c__, 32, TMul#(n_bytes, 8)));
+module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWordBytes, n_bytes), Add#(a__, 4, n_bytes), Add#(c__, 32, TMul#(n_bytes, 8)));
     Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
     Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
     Reg#( Bit#(TLog#(TAdd#(block_words,1)))) counter <- mkReg(0);
@@ -27,8 +27,6 @@ module mkInputLayer(InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWor
     let needs_pad_set <- mkPulseWireOR;
     let needs_pad_unset <- mkPulseWireOR;
     RWire#(Tuple2#(CoreWord, Bit#(CoreWordBytes))) enq_wire <- mkRWireSBR;
-
-    let is_open = !closed && !full && !needsPad;
 
     (* fire_when_enabled *)
     rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
@@ -62,13 +60,13 @@ module mkInputLayer(InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWor
 
     (* fire_when_enabled *)
     rule rl_pad if (!full && needsPad);
-        enq_wire.wset(tuple2(unpack(zeroExtend(1'b1)), 0));
+        enq_wire.wset(tuple2(unpack(zeroExtend(cipherPadByte)), 0));
         do_close.send();
         needs_pad_unset.send();
     endrule
 
     method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty) if (((!closed && !full) || do_deq) && !needsPad);
-        match {.padded, .paddedWord} = padWord(pack(word), padarg, True);
+        match {.padded, .paddedWord} = padWord(pack(word), padarg, cipherPadByte);
         enq_wire.wset(tuple2(pad ? unpack(paddedWord) : word, empty ? 0 : padargToValids(pad, padarg)));
         if (last) begin
             do_close.send();
@@ -76,7 +74,7 @@ module mkInputLayer(InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWor
         end
     endmethod
 
-    method ActionValue#(OutType#(n_bytes)) get if ((closed && !needsPad) || full);
+    method ActionValue#(InLayerToCipher#(n_bytes)) get if ((closed && !needsPad) || full);
         do_deq.send();
         return tuple2(unpack(pack(block)), unpack(pack(valids)));
     endmethod

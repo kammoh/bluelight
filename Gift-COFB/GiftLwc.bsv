@@ -1,13 +1,13 @@
-package GimliLwc;
+package GiftLwc;
 
 import LwcApi :: *;
-import Gimli :: *;
+import Gift :: *;
 
 (* default_clock_osc = "clk", default_reset = "rst" *)
 module lwc (LwcIfc);
-    let gimli <- mkGimli;
-    let lwc <- mkLwc(gimli, True, True);
+    let gift <- mkGift;
+    let lwc <- mkLwc(gift, True, True);
     return lwc;
 endmodule
 
-endpackage : GimliLwc
+endpackage : GiftLwc

@@ -1,23 +1,24 @@
 [[project]]
-name = "Gimli"
-description = "Gimli AEAD+HASH"
+name = "Gift"
+description = "Gift-COFB AEAD+HASH"
 author = "Kamyar Mohajerani"
 
 [[design]]
-name = 'GimliCipher'
+name = 'GiftCipher'
 
 [design.rtl]
 sources = [
-    'GimliCipher.bsv',
+    '../bluelight/BluelightUtils.bsv',
+    'GiftCipher.bsv',
 ]
-top = 'mkGimliCipher'
+top = 'mkGiftCipher'
 
 [design.tb]
 sources = ["cipherTb.py"]
 cocotb = { module = 'cipherTb' }
 
 [[design]]
-name = 'Gimli'
+name = 'Gift'
 
 [design.rtl]
 sources = [
@@ -26,15 +27,15 @@ sources = [
     '../bluelight/Bus/Bus.bsv',
     '../bluelight/CryptoCore.bsv',
     '../bluelight/LwcApi.bsv',
-    'GimliCipher.bsv',
+    'GiftCipher.bsv',
     'InputLayer.bsv',
-    'PISO.bsv',
-    'Gimli.bsv',
-    'GimliLwc.bsv',
+    'OutputLayer.bsv',
+    'Gift.bsv',
+    'GiftLwc.bsv',
 ]
 top = 'lwc'
 
 
 [design.tb]
-sources = ["gimliTb.py"]
-cocotb = { module = 'gimliTb' }
+sources = ["giftTb.py"]
+cocotb = { module = 'giftTb' }

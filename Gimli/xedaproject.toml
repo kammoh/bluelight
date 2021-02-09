@@ -32,7 +32,7 @@ sources = [
     'GimliRound.bsv',
     'GimliCipher.bsv',
     'InputLayer.bsv',
-    'PISO.bsv',
+    'OutputLayer.bsv',
     'Gimli.bsv',
     'GimliLwc.bsv',
 ]

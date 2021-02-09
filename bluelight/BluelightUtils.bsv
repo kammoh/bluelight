@@ -17,24 +17,27 @@ function w2__ rotateRight(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits
     return unpack({tpl_2(s), tpl_1(s)});
 endfunction
 
-
+function w__ swapEndian(w__ word) provisos (Bits#(w__, n), Mul#(nbytes, SizeOf#(Byte), n), Div#(n, SizeOf#(Byte), nbytes));
+    Vector#(nbytes, Byte) v = toChunks(pack(word));
+    return unpack(pack(reverse(v)));
+endfunction
 
 /// Move
 
-typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) OutType#(numeric type n_bytes);
+typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) InLayerToCipher#(numeric type n_bytes);
 
 interface InputLayerIfc#(numeric type n_bytes);
     method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty);
-    method ActionValue#(OutType#(n_bytes)) get;
+    method ActionValue#(InLayerToCipher#(n_bytes)) get;
     (* always_ready *)
     method Bool extraPad;
 endinterface
 
-interface CipherIfc#(numeric type n_bytes);
+interface CipherIfc#(numeric type n_bytes, type flags_type);
     // block in/out
-    method ActionValue#(BlockOfSize#(n_bytes)) bin(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, Bool key, Bool ct, Bool ad, Bool npub, Bool hash, Bool first, Bool last); 
+    method ActionValue#(BlockOfSize#(n_bytes)) blockUp(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
     // block out
-    method ActionValue#(BlockOfSize#(n_bytes)) bout;
+    method ActionValue#(BlockOfSize#(n_bytes)) blockDown;
 endinterface
 
 interface OutputLayerIfc#(numeric type n_bytes);

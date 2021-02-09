@@ -35,13 +35,14 @@ module mkGimli(CryptoCoreIfc);
             inState <= InBusy;
         else if (set_idle)
             inState <= InIdle;
-    endrule 
+    endrule
     
     (* fire_when_enabled *)
     rule rl_encipher if (inState == InBusy);
         match {.inBlock, .valids} <- inLayer.get;
         let last_block = last && !inLayer.extraPad;
-        let outBlock <- cipher.bin(inBlock, valids, isKey, isCT, isAD, isNpub, isHM, first, last_block);
+
+        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, ct:isCT, ad:isAD, npub:isNpub, hash:isHM, first:first, last:last_block});
         if (isPTCT) outLayer.enq(outBlock, valids);
         if (last_block) set_idle.send;
         first <= False;
@@ -49,13 +50,13 @@ module mkGimli(CryptoCoreIfc);
 
     (* fire_when_enabled *)
     rule rl_squeeze_tag_or_digest;
-        let out <- cipher.bout;
+        let out <- cipher.blockDown;
         outLayer.enq(out, replicate(True));
     endrule 
 
   // ================================================== Interfaces ==================================================
 
-    method Action process(SegmentType typ, Bool empty) if (inState == InIdle);
+    method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
         // only AD, CT, PT, HM can be empty
         if (empty)
             inLayer.put(unpack(zeroExtend(1'b1)), True, False, 0, True);

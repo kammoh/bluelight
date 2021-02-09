@@ -39,9 +39,9 @@ class CipherTb:
         self.dut = dut
         self.log = dut._log
         block_bytes = 16
-        self.bin = ActionMethod('bin', dut, dict(block=BsvBits(block_bytes*8), valids=BsvBits(block_bytes), key=BsvBool(
+        self.blockUp = ActionMethod('blockUp', dut, dict(block=BsvBits(block_bytes*8), valids=BsvBits(block_bytes), key=BsvBool(
         ), ct=BsvBool(), ad=BsvBool(), npub=BsvBool(), hash=BsvBool(), first=BsvBool(), last=BsvBool()))
-        self.bout = ActionMethod('bout', dut)
+        self.blockDown = ActionMethod('blockDown', dut)
         self.clock = dut.clk
         self.reset = dut.rst
         self.clock_edge = RisingEdge(self.clock)
@@ -49,8 +49,8 @@ class CipherTb:
     async def start(self):
         clock = self.clock
         reset = self.reset
-        self.bin.en <= 0
-        self.bout.en <= 0
+        self.blockUp.en <= 0
+        self.blockDown.en <= 0
         cocotb.fork(Clock(clock, 10, 'ns').start())
 
         reset <= 1
@@ -67,7 +67,7 @@ class CipherTb:
             block = data[i:i+width]
             last = (ld - i <= width)
             valids = (1 << (len(block) - last)) - 1
-            r = await self.bin(block=block, valids=valids, first=(i == 0), last=last, **kwargs)
+            r = await self.blockUp(block=block, valids=valids, first=(i == 0), last=last, **kwargs)
             rets.append(r)
         return rets
 
@@ -109,7 +109,7 @@ async def test_enc(dut: HierarchyObject):
             print(f" ct = {out.hex()}")
             assert out == ct
 
-            r = await tb.bout()
+            r = await tb.blockDown()
             out = vals2bytes(r)
             print(f" out tag = {out.hex()}")
             assert tag == out
@@ -156,7 +156,7 @@ async def test_dec(dut: HierarchyObject):
             print(f" pt = {out.hex()}")
             assert out == pt
 
-            r = await tb.bout()
+            r = await tb.blockDown()
             out = vals2bytes(r)
             print(f" out tag = {out.hex()}")
             assert tag == out
@@ -185,7 +185,7 @@ async def test_hash(dut: HierarchyObject):
         print("sending hash message...")
         await tb.blockin(msg + b'\1', hash=1)
 
-        r = [await tb.bout(), await tb.bout()]
+        r = [await tb.blockDown(), await tb.blockDown()]
         out = vals2bytes(r)
         print(f" out digest = {out.hex()}")
         assert digest == out

@@ -60,7 +60,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
 
   // should be synthesized out when ccPadsOutput is True TODO: verify QoR
   function CoreWord lwcPadWord(CoreWord word, Bit#(2) padarg);
-    return ccPadsOutput ? word : tpl_2(padWord(word, padarg, False));
+    return ccPadsOutput ? word : tpl_2(padWord(word, padarg, 0));
   endfunction
 
 
@@ -126,7 +126,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     inSegLast        <= True;
     inSegEoT         <= True;
 
-    cryptoCore.process(headerType(hdr), len == 0);
+    cryptoCore.process(headerType(hdr), len == 0, False);
     inState <= GetSdiData;
   endrule
 
@@ -158,7 +158,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     endcase
 
     let empty = len == 0;
-    cryptoCore.process(typ, empty);
+    cryptoCore.process(typ, empty, headerEoI(hdr));
     
     if (empty)
     begin

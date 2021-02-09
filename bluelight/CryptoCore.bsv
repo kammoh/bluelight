@@ -41,12 +41,12 @@ return
   endinterface;
 endfunction
 
-function Tuple2#(Bool, CoreWord) padWord(CoreWord word, PadArg padarg, Bool padOne);
+function Tuple2#(Bool, CoreWord) padWord(CoreWord word, PadArg padarg, Byte padByte);
   return case (padarg)
     2'd0    : tuple2(False, word);
-    2'd1    : tuple2(True, {zeroExtend(pack(padOne)), word[7:0]});
-    2'd2    : tuple2(True, {zeroExtend(pack(padOne)), word[15:0]});
-    default : tuple2(True, {zeroExtend(pack(padOne)), word[23:0]});
+    2'd1    : tuple2(True, {zeroExtend(padByte), word[7:0]});
+    2'd2    : tuple2(True, {zeroExtend(padByte), word[15:0]});
+    default : tuple2(True, {padByte, word[23:0]});
   endcase;
 endfunction
 
@@ -78,7 +78,7 @@ interface CryptoCoreIfc;
   // after fire, words of type `typ` will be sent to CryptoCore, if not empty
   // typ:   type of segment to be received (if note empty) and processed
   // empty: no bdi will be sent afterwards
-  method Action process(SegmentType typ, Bool empty);
+  method Action process(SegmentType typ, Bool empty, Bool eoi);
   
   // input to CryptoCore
   interface FifoIn#(BdIO)  bdi;
@@ -87,9 +87,9 @@ interface CryptoCoreIfc;
   interface FifoOut#(BdIO) bdo;
 endinterface
 
-function Bit#(n) swapEndian(Bit#(n) word) provisos (Mul#(nbytes, SizeOf#(Byte), n), Div#(n, SizeOf#(Byte), nbytes));
-    Vector#(nbytes, Byte) v = toChunks(word);
-    return pack(reverse(v));
+function w__ swapEndian(w__ word) provisos (Bits#(w__, n), Mul#(nbytes, SizeOf#(Byte), n), Div#(n, SizeOf#(Byte), nbytes));
+    Vector#(nbytes, Byte) v = toChunks(pack(word));
+    return unpack(pack(reverse(v)));
 endfunction
 
 endpackage : CryptoCore

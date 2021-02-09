@@ -33,9 +33,21 @@ except:
     from cocolight.lwc_api import LwcCffi, LwcAead, LwcHash
     from cocolight import LwcRefCheckerTb
 
-XT_BS = 16
-AD_BS = 16
-HM_BS = 16
+class Cref(LwcCffi, LwcAead):
+    """ Python wrapper for C-Reference implementation """
+
+    def __init__(self, aead_algorithm, hash_algorithm=None, root_cref_dir=Path(SCRIPT_DIR) / 'cref') -> None:
+        Cref.aead_algorithm = aead_algorithm
+        Cref.hash_algorithm = hash_algorithm
+        Cref.root_cref_dir = root_cref_dir
+        LwcCffi.__init__(self, force_recompile=True)
+
+ref = Cref(aead_algorithm='giftcofb128v1')
+block_bits = dict(AD=128, PT=128)
+block_bits['XT'] = block_bits['CT'] = block_bits['PT']
+
+XT_BS = block_bits['PT'] // 8
+AD_BS = block_bits['AD'] // 8
 
 
 def short_sizes(bs):
@@ -44,13 +56,7 @@ def short_sizes(bs):
 
 class RefCheckerTb(LwcRefCheckerTb):
     def __init__(self, dut: HierarchyObject, debug=False, max_in_stalls=0, max_out_stalls=0, min_out_stalls=None) -> None:
-        class Cref(LwcCffi, LwcAead, LwcHash):
-            """ Python wrapper for C-Reference implementation """
-            aead_algorithm = 'gimli24v1'
-            hash_algorithm = 'gimli24v1'
-            root_cref_dir = Path(SCRIPT_DIR) / 'cref'
-        ref = Cref()
-        super().__init__(dut, ref, debug=debug, max_in_stalls=max_in_stalls,
+        LwcRefCheckerTb.__init__(self, dut, ref, debug=debug, max_in_stalls=max_in_stalls,
                          max_out_stalls=max_out_stalls, min_out_stalls=min_out_stalls, supports_hash=ref.hash_algorithm is not None)
 
 
@@ -66,13 +72,15 @@ async def debug_enc(dut: HierarchyObject):
     await tb.start()
 
     await tb.xenc_test(ad_size=0,  pt_size=15)
+    await tb.xenc_test(ad_size=1,  pt_size=4)
+    await tb.xenc_test(ad_size=0, pt_size=XT_BS)
+    await tb.xenc_test(ad_size=AD_BS, pt_size=0)
     await tb.xenc_test(ad_size=0,  pt_size=4)
     await tb.xenc_test(ad_size=9,  pt_size=9)
     await tb.xenc_test(ad_size=4,  pt_size=24)
     await tb.xenc_test(ad_size=3,  pt_size=2)
     await tb.xenc_test(ad_size=0,  pt_size=2)
     await tb.xenc_test(ad_size=0,  pt_size=0)
-    await tb.xenc_test(ad_size=0, pt_size=16)
     await tb.xenc_test(ad_size=44, pt_size=32)
     await tb.xenc_test(ad_size=45, pt_size=0)
     await tb.xenc_test(ad_size=44, pt_size=0)
@@ -121,6 +129,9 @@ async def debug_hash(dut: HierarchyObject):
     tb = RefCheckerTb(dut, debug=debug, max_in_stalls=max_stalls,
                       max_out_stalls=max_stalls)
 
+    if not tb.supports_hash:
+        return
+
     await tb.start()
 
     # await tb.xhash_test(15)
@@ -156,7 +167,8 @@ async def blanket_test_simple(dut: HierarchyObject):
     for ad_size, xt_size in itertools.product(short_sizes(AD_BS), short_sizes(XT_BS)):
         await tb.xdec_test(ad_size=ad_size, ct_size=xt_size)
         await tb.xenc_test(ad_size=ad_size, pt_size=xt_size)
-        await tb.xhash_test(xt_size)
+        if tb.supports_hash:
+            await tb.xhash_test(xt_size)
 
     await tb.xdec_test(ad_size=1536, ct_size=0)
     await tb.xenc_test(ad_size=1536, pt_size=0)
@@ -173,8 +185,6 @@ async def blanket_test_simple(dut: HierarchyObject):
 
 @cocotb.test()
 async def randomized_tests(dut: HierarchyObject):
-
-    supports_hash = True
 
     debug = os.environ.get('DEBUG', False)
     # debug = True
@@ -198,7 +208,7 @@ async def randomized_tests(dut: HierarchyObject):
     await tb.start()
 
     for ad_size, xt_size in itertools.product(ad_sizes, xt_sizes):
-        op = randint(0, 2 if supports_hash else 1)
+        op = randint(0, 2 if tb.supports_hash else 1)
         if (op == 0):
             await tb.xenc_test(ad_size=ad_size, pt_size=xt_size)
         elif (op == 1):
@@ -226,7 +236,6 @@ async def measure_timings(dut: HierarchyObject, supportsHash=False):
     await tb.start()
 
     all_results = {}
-    block_sizes = {'AD': AD_BS, 'PT/CT': XT_BS, 'HM':  HM_BS}
 
     sizes = [16, 64, 1536]
 
@@ -237,24 +246,24 @@ async def measure_timings(dut: HierarchyObject, supportsHash=False):
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
             results[f'{bt} {sz}'] = cycles
         for x in [4, 5]:
-            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes[bt], xt_size=0))
+            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_bits[bt]//8, xt_size=0))
             results[f'{bt} {x}BS'] = cycles
         results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
-        bt = 'PT/CT'
+        bt = 'XT'
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
             results[f'{bt} {sz}'] = cycles
         for x in [4, 5]:
-            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=x*block_sizes[bt]))
+            cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=x*block_bits[bt]//8))
             results[f'{bt} {x}BS'] = cycles
         results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
-        bt = 'AD+PT/CT'
+        bt = 'AD+XT'
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=sz))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {sz}'] = cycles
         for x in [4, 5]:
-            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_sizes['AD'], xt_size=x*block_sizes['PT/CT']))
+            cycles = await tb.measure_op(dict(op=op, ad_size=x*block_bits['AD']//8, xt_size=x*block_bits['XT']//8))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f'{bt} {x}BS'] = cycles
         results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
@@ -269,7 +278,7 @@ async def measure_timings(dut: HierarchyObject, supportsHash=False):
             # print(f'hash HM={sz}: {cycles}')
             results[f'{bt} {sz}'] = cycles
         for x in [4, 5]:
-            cycles = await tb.measure_op(dict(op=op, hm_size=x*block_sizes[bt]))
+            cycles = await tb.measure_op(dict(op=op, hm_size=x*block_bits[bt]))
             results[f'{bt} {x}BS'] = cycles
         results[f'{bt} Long'] = results[f'{bt} 5BS'] - results[f'{bt} 4BS']
         all_results[op] = results

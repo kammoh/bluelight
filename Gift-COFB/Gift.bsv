@@ -1,10 +1,8 @@
-package Gimli;
-
-import Vector :: *;
+package Gift;
 
 import InputLayer :: *;
 import OutputLayer :: *;
-import GimliCipher :: *;
+import GiftCipher :: *;
 import CryptoCore :: *;
 
 typedef enum {
@@ -12,20 +10,21 @@ typedef enum {
     InBusy  // recieve from bdi
 } InputState deriving(Bits, Eq);
 
-module mkGimli(CryptoCoreIfc);
-    let cipher <- mkGimliCipher;
-    let inLayer <- mkInputLayer;
+module mkGift(CryptoCoreIfc);
+    Byte cipherPadByte = 8'h80;
+    let cipher <- mkGiftCipher;
+    let inLayer <- mkInputLayerNoExtraPad(cipherPadByte);
     let outLayer <- mkOutputLayer;
     let inState <- mkReg(InIdle);
     let set_busy <- mkPulseWire;
     let set_idle <- mkPulseWire;
 
     Reg#(Bool) isKey <- mkRegU;
-    Reg#(Bool) isHM <- mkRegU;
     Reg#(Bool) isCT <- mkRegU;
     Reg#(Bool) isPTCT <- mkRegU; // PT or CT
     Reg#(Bool) isNpub <- mkRegU;
     Reg#(Bool) isAD <- mkRegU;
+    Reg#(Bool) isEoI <- mkRegU;
     Reg#(Bool) first <- mkRegU;
     Reg#(Bool) last <- mkRegU;
 
@@ -37,39 +36,39 @@ module mkGimli(CryptoCoreIfc);
             inState <= InBusy;
         else if (set_idle)
             inState <= InIdle;
-    endrule 
+    endrule
     
     (* fire_when_enabled *)
     rule rl_encipher if (inState == InBusy);
         match {.inBlock, .valids} <- inLayer.get;
-        let last_block = last && !inLayer.extraPad;
-        let outBlock <- cipher.bin(inBlock, valids, isKey, isCT, isAD, isNpub, isHM, first, last_block);
+
+        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, ct:isCT, ptct:isPTCT, ad:isAD, npub:isNpub, first:first, last:last, eoi: isEoI});
         if (isPTCT) outLayer.enq(outBlock, valids);
-        if (last_block) set_idle.send;
+        if (last) set_idle.send;
         first <= False;
     endrule
 
     (* fire_when_enabled *)
     rule rl_squeeze_tag_or_digest;
-        let out <- cipher.bout;
+        let out <- cipher.blockDown;
         outLayer.enq(out, replicate(True));
     endrule 
 
   // ================================================== Interfaces ==================================================
 
-    method Action process(SegmentType typ, Bool empty) if (inState == InIdle);
+    method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
         // only AD, CT, PT, HM can be empty
         if (empty)
-            inLayer.put(unpack(zeroExtend(1'b1)), True, False, 0, True);
+            inLayer.put(unpack(zeroExtend(cipherPadByte)), True, False, 0, True);
         set_busy.send;
         first  <= True;
         last   <= empty;
         isKey  <= typ == Key;
         isNpub <= typ == Npub;
-        isHM   <= typ == HashMessage;
         isCT   <= typ == Ciphertext;
         isAD   <= typ == AD;
         isPTCT <= typ == Ciphertext || typ == Plaintext;
+        isEoI  <= eoi;
     endmethod
     
     interface FifoIn bdi;
@@ -88,6 +87,6 @@ module mkGimli(CryptoCoreIfc);
         method notEmpty = outLayer.notEmpty;
     endinterface
   
-endmodule : mkGimli
+endmodule : mkGift
 
-endpackage : Gimli
+endpackage : Gift

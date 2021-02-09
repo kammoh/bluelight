@@ -192,12 +192,12 @@ def get_used_mods(use_dir: Path, mod: str):
 def bsc_generate_verilog():
     top_file = bluespec_sources[-1]
     top = rtl_settings['top']
+    # if not args.debug: pretty messed up! do not use!
     if vout_dir.exists():
         shutil.rmtree(vout_dir)
-    vout_dir.mkdir(exist_ok=False)
-    if not args.debug:
-        if bsc_out.exists():
-            shutil.rmtree(bsc_out)
+    if bsc_out.exists():
+        shutil.rmtree(bsc_out)
+    vout_dir.mkdir(exist_ok=True)
     bsc_out.mkdir(exist_ok=True)
 
     for src in bluespec_sources:
@@ -211,6 +211,11 @@ def bsc_generate_verilog():
     #     subprocess.run(cmd, check=True)
 
     bsc_defines = rtl_settings.get('parameters', {})
+
+    verilog_defines = ['BSV_NO_INITIAL_BLOCKS']
+
+    if top.lower() == 'lwc':
+        verilog_defines.append('BSV_POSITIVE_RESET')
 
     if args.debug:
         print("DEBUG!")
@@ -252,8 +257,7 @@ def bsc_generate_verilog():
     verilog_sources = list(vout_dir.glob('*.v'))
 
     for v in verilog_sources:
-        prepend_to_file(v, ['`define BSV_POSITIVE_RESET',
-                            '`define BSV_NO_INITIAL_BLOCKS'])
+        prepend_to_file(v, ['`define ' + vd for vd in verilog_defines])
 
     print(f'verilog_sources={verilog_sources}')
 

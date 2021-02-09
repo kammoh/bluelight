@@ -273,13 +273,13 @@ class LwcTb(Tb):
 
             segment.header.last = last
 
-            eoi = last
-            if not last:
-                eoi = True
-                for x in segments[i+1:]:
-                    if x.len and x.type not in {SegmentType.TAG, SegmentType.LENGTH}:
-                        eoi = False
-                        break
+            # eoi = last
+            # if not last:
+            eoi = True
+            for x in segments[i+1:]:
+                if x.len and x.type not in {SegmentType.TAG, SegmentType.LENGTH}:
+                    eoi = False
+                    break
 
             segment.header.last = last
             segment.header.eoi = eoi
