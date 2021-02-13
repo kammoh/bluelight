@@ -35,11 +35,22 @@ function HalfBlock triple(HalfBlock s);
     return unpack(pack(double(s)) ^ pack(s));
 endfunction
 
-function GiftState toGiftState(BlockOfSize#(GiftBlockBytes) block);
+function GiftState toGiftState(Block block);
     GiftState s;
     for (Integer i = 0; i < valueOf(NumBlockWords); i = i + 1)
-        s[i] = pack(swapEndian(takeAt(4*i, block)));
+        s[i] = swapEndian(takeAt(4*i, block));
     return s;
+endfunction
+
+function KeyState toKeyState(Block block);
+    KeyState s = unpack(pack(block));
+    return map(swapEndian, s);
+endfunction
+
+function Block giftStateToBlock(GiftState s);
+    // big-endian
+    s = map(swapEndian, s);
+    return unpack(pack(s));
 endfunction
 
 // Y[1],Y[2] -> Y[2],Y[1]<<<1
@@ -103,7 +114,7 @@ module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFac
     Reg#(State) postPermuteState <- mkRegU;
     Reg#(HalfBlock) delta <- mkRegU;
     Reg#(Bit#(TLog#(perm_cycles))) roundCounter <- mkRegU;
-    let emptyM <- mkRegU;
+    Reg#(Bool) emptyM <- mkRegU;
 
     match {.nextGS, .nextKS, .nextRC} = giftRound(giftState, keyState, roundConstant);
 
@@ -153,11 +164,13 @@ module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFac
             keyState <= nextKS;
     endrule
 
+    method Action init(OpCode op);
+    endmethod
 
     method ActionValue#(Block) blockUp(Block block, ByteValids valids, Flags flags) if (state == Idle);
-        let y = unpack(pack(map(swapEndian, giftState)));
-        let lastAdEmptyM = flags.ad && flags.last && (emptyM || flags.eoi);
-        let emptyMsg = emptyM && flags.ptct;
+        let y = giftStateToBlock(giftState);
+        Bool lastAdEmptyM = flags.ad && flags.last && (emptyM || flags.eoi);
+        Bool emptyMsg = emptyM && flags.ptct;
 
         match {.x, .c} = pho(y, block, valids, flags.ct);
 
@@ -167,13 +180,13 @@ module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFac
             emptyM <= True; // don't unset if previously set
 
         if (flags.key)
-            keyState <= map(swapEndian, unpack(pack(block)));
+            keyState <= toKeyState(block);
         else begin
             if (flags.npub)
                 giftState <= toGiftState(block);
             else begin
                 Bool fullBlock = last(valids);
-                let delta1 = flags.ad && flags.first ? take(unpack(pack(map(swapEndian, giftState)))) : delta;
+                let delta1 = flags.ad && flags.first ? take(y) : delta;
                 HalfBlock offsetX2 = double(delta1);
                 let offsetX3 = unpack(pack(offsetX2) ^ pack(delta1));
                 let offsetX9 = triple(offsetX3);

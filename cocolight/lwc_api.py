@@ -1,18 +1,20 @@
+import importlib
+from cffi import FFI
+import inspect
+import os
+from typing import Dict, Tuple
+import sys
+from pathlib import Path
 from typeguard import typechecked
 from typeguard.importhook import install_import_hook
 install_import_hook('lwc_api')
 
-import sys
-from typing import Tuple
-import os
-import inspect
-from cffi import FFI
-import importlib
 
 # Proposed Python LWC API
 # inspired from https://csrc.nist.gov/CSRC/media/Projects/Lightweight-Cryptography/documents/final-lwc-submission-requirements-august2018.pdf
 
 tag_type = bytes
+
 
 class LwcAead:
     CRYPTO_KEYBYTES = None
@@ -64,10 +66,9 @@ class LwcCffi():
     CRYPTO_ABYTES = None
     CRYPTO_HASH_BYTES = None
 
-    def build_cffi(self, root_cref_dir, algorithm, cffi_build_dir, DEBUG_LEVEL=0):
-        assert algorithm
+    def build_cffi(self, root_cref_dir: Path, algorithms: Dict[str, str], cffi_build_dir:str, DEBUG_LEVEL: int = 0):
         assert root_cref_dir
-        headers = {'aead': '''
+        headers = dict(aead='''
         int crypto_aead_encrypt(
             unsigned char *c, unsigned long long *clen,
             const unsigned char *m, unsigned long long mlen,
@@ -83,13 +84,12 @@ class LwcCffi():
             const unsigned char *ad,unsigned long long adlen,
             const unsigned char *npub,
             const unsigned char *k
-            );
-        '''
-                   }
-        if self.hash_algorithm:
-            headers['hash'] = 'int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);\n'
+        );\n''', hash='int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);\n')
 
-        for op, header in headers.items():
+        for op, algorithm in algorithms.items():
+            if algorithm is None:
+                continue
+            header = headers[op]
             print(header)
             ffibuilder = FFI()
             cref_dir = root_cref_dir / f'crypto_{op}' / algorithm / 'ref'
@@ -143,7 +143,7 @@ class LwcCffi():
 
             if self.hash_algorithm:
                 spec = importlib.util.find_spec(
-                    f'cffi_{self.aead_algorithm}_hash')
+                    f'cffi_{self.hash_algorithm}_hash')
                 if not spec:
                     raise ModuleNotFoundError
                 hash_module = spec.loader.load_module()
@@ -159,7 +159,7 @@ class LwcCffi():
             try_imports()
         except ModuleNotFoundError as e:
             mylog('Need to build the library...')
-            self.build_cffi(self.root_cref_dir, self.aead_algorithm,
+            self.build_cffi(self.root_cref_dir, dict(aead=self.aead_algorithm, hash=self.hash_algorithm),
                             self.cffi_build_dir, DEBUG_LEVEL=DEBUG_LEVEL)
             importlib.invalidate_caches()
             sys.path.append(os.path.join(os.getcwd(), self.cffi_build_dir))
@@ -195,7 +195,7 @@ class LwcCffi():
         tag = ct[-self.CRYPTO_ABYTES:]
         ct = ct[:-self.CRYPTO_ABYTES]
         return ct, tag
-    
+
     @typechecked
     def decrypt(self, ct: bytes, ad: bytes, npub: bytes, key: bytes, tag: bytes) -> bytes:
         ct_len = len(ct)

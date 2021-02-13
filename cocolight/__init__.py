@@ -369,7 +369,9 @@ class LwcRefCheckerTb(LwcTb):
 
     async def xhash_test(self, hm_size):
         hm = self.gen_inputs(hm_size)
-        digest = self.ref.hash(hm)
+        digest:bytes = self.ref.hash(hm)
+        if self.debug:
+            print(f'message={hm.hex()}\ndigest={digest.hex()}')
         await self.hash_test(hm, digest=digest)
 
     async def measure_op(self, op_dict: dict, timeout=None):

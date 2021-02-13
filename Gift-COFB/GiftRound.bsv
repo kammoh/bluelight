@@ -1,7 +1,6 @@
 package GiftRound;
 
 import Vector :: *;
-import Printf :: *;
 import BluelightUtils :: *;
 
 typedef 128 NumBlockBits;
@@ -14,11 +13,6 @@ typedef Vector#(NumKeyStateWords, KWord) KeyState;
 typedef Vector#(NumBlockWords, SWord) GiftState;
 
 typedef Bit#(6) RoundConstant;
-
-function BlockOfSize#(GiftBlockBytes) giftStateToBlock(GiftState s);
-    // big-endian
-    return unpack(pack(map(swapEndian, s)));
-endfunction
 
 function GiftState subCells (GiftState s);
     s[1] = s[1] ^ (s[0] & s[2]);

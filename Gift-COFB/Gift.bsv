@@ -56,6 +56,9 @@ module mkGift(CryptoCoreIfc);
 
   // ================================================== Interfaces ==================================================
 
+    method Action init(OpCode op);
+    endmethod
+
     method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
         // only AD, CT, PT, HM can be empty
         if (empty)

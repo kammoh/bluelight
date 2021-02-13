@@ -1,25 +1,28 @@
 [[project]]
-name = "Gift"
-description = "Gift-COFB AEAD+HASH"
+name = "Ascon"
+description = "Ascon AEAD+HASH"
 author = "Kamyar Mohajerani"
 
 [[design]]
-name = 'GiftCipher'
+name = 'AsconCipher'
+
+[design.lwc]
+algorithm = ['']
 
 [design.rtl]
 sources = [
     '../bluelight/BluelightUtils.bsv',
-    'GiftRound.bsv',
-    'GiftCipher.bsv',
+    'AsconRound.bsv',
+    'AsconCipher.bsv',
 ]
-top = 'mkGiftCipher'
+top = 'mkAsconCipher'
 
 [design.tb]
 sources = ["cipherTb.py"]
 cocotb = { module = 'cipherTb' }
 
 [[design]]
-name = 'Gift'
+name = 'Ascon'
 
 [design.rtl]
 sources = [
@@ -29,16 +32,15 @@ sources = [
     '../bluelight/Bus/Bus.bsv',
     '../bluelight/CryptoCore.bsv',
     '../bluelight/LwcApi.bsv',
-    'GiftRound.bsv',
-    'GiftCipher.bsv',
+    'AsconCipher.bsv',
     'InputLayer.bsv',
-    'OutputLayer.bsv',
-    'Gift.bsv',
-    'GiftLwc.bsv',
+    'PISO.bsv',
+    'Ascon.bsv',
+    'AsconLwc.bsv',
 ]
 top = 'lwc'
 
 
 [design.tb]
-sources = ["giftTb.py"]
-cocotb = { module = 'giftTb' }
+sources = ["asconTb.py"]
+cocotb = { module = 'asconTb' }

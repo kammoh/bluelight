@@ -1,18 +1,20 @@
-package Gimli;
+package Ascon;
 
+import Vector :: *;
+import BluelightUtils :: *;
 import InputLayer :: *;
 import OutputLayer :: *;
-import GimliCipher :: *;
 import CryptoCore :: *;
+import AsconCipher :: *;
 
 typedef enum {
     InIdle, // waiting on process command
     InBusy  // recieve from bdi
 } InputState deriving(Bits, Eq);
 
-module mkGimli(CryptoCoreIfc);
-    let cipher <- mkGimliCipher;
-    Byte padByte = 8'b1;
+module mkAscon(CryptoCoreIfc);
+    let cipher <- mkAsconCipher;
+    Byte padByte = 8'h80;
     let inLayer <- mkInputLayer(padByte);
     let outLayer <- mkOutputLayer;
     let inState <- mkReg(InIdle);
@@ -43,7 +45,7 @@ module mkGimli(CryptoCoreIfc);
         match {.inBlock, .valids} <- inLayer.get;
         let last_block = last && !inLayer.extraPad;
 
-        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, ct:isCT, ad:isAD, npub:isNpub, hash:isHM, first:first, last:last_block});
+        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, npub:isNpub, ad:isAD, ptct:isPTCT, ct:isCT, hash:isHM, first:first, last:last_block});
         if (isPTCT) outLayer.enq(outBlock, valids);
         if (last_block) set_idle.send;
         first <= False;
@@ -57,14 +59,9 @@ module mkGimli(CryptoCoreIfc);
 
   // ================================================== Interfaces ==================================================
 
-    method Action init(OpCode op) if (inState == InIdle);
-        cipher.init(op);
-    endmethod
-
     method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
         // only AD, CT, PT, HM can be empty
-        if (empty)
-            inLayer.put(unpack(zeroExtend(padByte)), True, False, 0, True);
+        if (empty) inLayer.put(unpack(zeroExtend(padByte)), True, False, 0, True);
         set_busy.send;
         first  <= True;
         last   <= empty;
@@ -74,6 +71,10 @@ module mkGimli(CryptoCoreIfc);
         isCT   <= typ == Ciphertext;
         isAD   <= typ == AD;
         isPTCT <= typ == Ciphertext || typ == Plaintext;
+    endmethod
+
+    method Action init(OpCode op) if (inState == InIdle);
+        cipher.init(op);
     endmethod
     
     interface FifoIn bdi;
@@ -92,6 +93,6 @@ module mkGimli(CryptoCoreIfc);
         method notEmpty = outLayer.notEmpty;
     endinterface
   
-endmodule : mkGimli
+endmodule : mkAscon
 
-endpackage : Gimli
+endpackage : Ascon

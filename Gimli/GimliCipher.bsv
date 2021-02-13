@@ -27,8 +27,6 @@ typedef struct{
 
 typedef enum {
     Idle,
-    GetKey2,
-    GetNpub,
     Permute,
     Squeeze2, // 1/2 (digest)
     Squeeze1  // 2/2 (digest) or 1/1 (tag)
@@ -39,6 +37,7 @@ typedef enum {
 module mkGimliCipher (CipherIfc#(GimliBlockBytes, Flags)) provisos (Mul#(UnrollFactor, perm_cycles__, CipherRounds));
     Reg#(GimliState) gimliState <- mkRegU;
     let state <- mkReg(Idle);
+    let key2 <- mkReg(False);
     Reg#(State) postPermuteState <- mkRegU;
     Reg#(Round) roundCounter <- mkRegU;
     let unrollFactor = valueOf(UnrollFactor);
@@ -61,7 +60,10 @@ module mkGimliCipher (CipherIfc#(GimliBlockBytes, Flags)) provisos (Mul#(UnrollF
             state <= postPermuteState;
     endrule
 
-    method ActionValue#(Block) blockUp(Block bytes_block, ByteValids valids, Flags flags) if (state == Idle || state == GetKey2 || state == GetNpub);
+    method Action init(OpCode op);
+    endmethod
+
+    method ActionValue#(Block) blockUp(Block bytes_block, ByteValids valids, Flags flags) if (state == Idle);
         GimliBlock block = toChunks(bytes_block);
         GimliBlock xoredBlock = newVector;
         GimliState absorbedState = gimliState;
@@ -71,24 +73,20 @@ module mkGimliCipher (CipherIfc#(GimliBlockBytes, Flags)) provisos (Mul#(UnrollF
                 absorbedState[0][j][k] = (flags.ct && valids[4*j + k]) ? block[j][k] : xoredBlock[j][k];
             end
         absorbedState[2][3][3][0] = gimliState[2][3][3][0] ^ pack(flags.last && !flags.key && !flags.npub);
-        if (state == GetKey2) begin
-            gimliState[2] <= block;
-            state <= GetNpub;
+
+        if (flags.key) begin
+            gimliState[key2 ? 2 : 1] <= block;
+            key2 <= !key2;
         end else begin
-            if (flags.key) begin
-                gimliState[1] <= block;
-                state <= GetKey2;
-            end else begin
-                if (flags.hash && flags.first)
-                    gimliState <= unpack({7'b0, pack(flags.last), zeroExtend(pack(block))});
-                else if (flags.npub)
-                    gimliState[0] <= block;
-                else // absorb (or replace)
-                    gimliState <= absorbedState;
-                state <= Permute;
-                postPermuteState <= (flags.last && !flags.npub && !flags.ad) ? (flags.hash ? Squeeze2 : Squeeze1) : Idle;
-                roundCounter <= roundMax;
-            end
+            if (flags.hash && flags.first)
+                gimliState <= unpack({7'b0, pack(flags.last), zeroExtend(pack(block))});
+            else if (flags.npub)
+                gimliState[0] <= block;
+            else // absorb (or replace)
+                gimliState <= absorbedState;
+            state <= Permute;
+            postPermuteState <= (flags.last && !flags.npub && !flags.ad) ? (flags.hash ? Squeeze2 : Squeeze1) : Idle;
+            roundCounter <= roundMax;
         end
         return concat(xoredBlock);
     endmethod
