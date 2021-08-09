@@ -78,9 +78,8 @@ module mkGimli(CryptoCoreIfc);
     
     interface FifoIn bdi;
         method Action enq(i) if (inState == InBusy);
-            match tagged BdIO {word: .word, lot: .lot, padarg: .padarg} = i;
-            inLayer.put(unpack(pack(word)), lot, lot && !isKey && !isNpub, padarg, False);
-            last <= lot;
+            inLayer.put(unpack(pack(i.word)), i.lot, i.lot && !isKey && !isNpub, i.padarg, False);
+            last <= i.lot;
         endmethod
     endinterface
 

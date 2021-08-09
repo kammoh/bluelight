@@ -39,12 +39,15 @@ class CipherTb:
         self.dut = dut
         self.log = dut._log
         block_bytes = 16
-        self.blockUp = ActionMethod('blockUp', dut, dict(block=BsvBits(block_bytes*8), valids=BsvBits(block_bytes), key=BsvBool(
-        ), ct=BsvBool(), ad=BsvBool(), npub=BsvBool(), hash=BsvBool(), first=BsvBool(), last=BsvBool()))
-        self.blockDown = ActionMethod('blockDown', dut)
         self.clock = dut.clk
         self.reset = dut.rst
         self.clock_edge = RisingEdge(self.clock)
+        self.blockUp = ActionMethod(
+            'blockUp', dut, dict(block=BsvBits(block_bytes*8), valids=BsvBits(block_bytes), key=BsvBool(), ct=BsvBool(), ad=BsvBool(), npub=BsvBool(), hash=BsvBool(), first=BsvBool(), last=BsvBool()), clock_edge=self.clock_edge
+        )
+        self.blockDown = ActionMethod(
+            'blockDown', dut, dict(), clock_edge=self.clock_edge
+        )
 
     async def start(self):
         clock = self.clock

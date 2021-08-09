@@ -264,10 +264,9 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
         tagFifo.deq;
         cryptoCore.bdo.deq;
         let intag = tagFifo.first;
-        match tagged BdIO {word:.word, lot:.lot} = cryptoCore.bdo.first;
         outCounter <= outCounter - 1;
 
-        let sw = lwcSwapEndian(word);
+        let sw = lwcSwapEndian(cryptoCore.bdo.first.word);
 
         // $display("Verifytag got tag:%h core:%h", intag, sw);
 
@@ -283,8 +282,9 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     (* fire_when_enabled *)
     rule rl_sendout_data if (outState == SendData);
         cryptoCore.bdo.deq;
-
-        match tagged BdIO {word:.word, lot:.lot, padarg: .padarg} = cryptoCore.bdo.first;
+        let word = cryptoCore.bdo.first.word;
+        let padarg = cryptoCore.bdo.first.padarg;
+        let lot = cryptoCore.bdo.first.lot;
         let pw = lwcPadWord(word, padarg);
         doSender.in.enq(CoreWordWithLast { data: lwcSwapEndian(lot ? pw : word), last: False} );
         let last_of_seg = outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0));

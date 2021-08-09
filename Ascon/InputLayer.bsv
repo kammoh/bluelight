@@ -34,7 +34,7 @@ module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul
             tagged Valid .enqued: begin
                 match {.w, .v} = enqued;
                 if (counter == 0 || do_deq) begin
-                    block <= unpack(zeroExtend(pack(w)));
+                    block <= unpack(zeroExtend(pack(w))); // do we need to zero fill the whole block?
                     valids <= unpack(zeroExtend(v));
                 end else begin
                     block[counter] <= w;
