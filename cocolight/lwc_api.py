@@ -1,5 +1,4 @@
 import importlib
-import importlib.util
 from cffi import FFI
 import inspect
 import os
@@ -42,6 +41,8 @@ class LwcHash:
         ...
 
 
+# Python wrapper of C implementations, provides mechanism for building cpython native libs
+
 SCRIPT_DIR = os.path.realpath(os.path.dirname(
     inspect.getfile(inspect.currentframe())))
 
@@ -55,7 +56,6 @@ def mylog(*args, **kwargs):
 
 
 class LwcCffi():
-    """Python wrapper of C implementations, provides mechanism for building cpython native libs"""
     aead_algorithm = None
     hash_algorithm = None
     root_cref_dir = None
@@ -142,7 +142,8 @@ class LwcCffi():
             assert self.aead_ffi
 
             if self.hash_algorithm:
-                spec = importlib.util.find_spec(f'cffi_{self.hash_algorithm}_hash')
+                spec = importlib.util.find_spec(
+                    f'cffi_{self.hash_algorithm}_hash')
                 if not spec:
                     raise ModuleNotFoundError
                 hash_module = spec.loader.load_module()

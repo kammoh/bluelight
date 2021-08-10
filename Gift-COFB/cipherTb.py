@@ -30,6 +30,7 @@ class Cref(LwcCffi, LwcAead):
         Cref.root_cref_dir = root_cref_dir
         LwcCffi.__init__(self, force_recompile=True)
 
+
 ref = Cref(aead_algorithm='giftcofb128v1')
 block_bits = dict(AD=128, PT=128)
 
@@ -53,13 +54,21 @@ class CipherTb:
             self.reset_val = 0
 
     async def start(self):
+        print("start")
         clock = self.clock
         self.blockUp.en <= 0
         self.blockDown.en <= 0
+        print("forking clock")
         cocotb.fork(Clock(clock, 10, 'ns').start())
+        print("clock forked")
 
+        print("reset assert")
         self.reset <= self.reset_val
-        await ClockCycles(clock, 2)
+        print("wait 2 cycles")
+        await self.clock_edge
+        # await self.clock_edge
+        # await ClockCycles(clock, 2)
+        print("reset deassert")
         self.reset <= (not self.reset_val)
         self.log.info("reset done ")
 
@@ -69,32 +78,29 @@ class CipherTb:
             pad = pad if len(data) == 0 or (len(data) % width != 0) else None
         if pad is not None:
             data += pad  # TODO or callable
-        empty = False
-        if len(data) == 0:
-            data = bytes().zfill(width)
-            empty = True
+            
         ld = len(data)
         rets = []
         for i in range(0, ld, width):
             block = data[i:i+width]
             last = (ld - i <= width)
-            valids = 0 if empty else (
-                1 << (len(block) - (bool(pad) and last))) - 1
+            valids = (1 << (len(block) - (bool(pad) and last))) - 1
             flags = dict(first=(i == 0), last=last, **kwargs)
             r = await self.blockUp(block=block, valids=valids, flags=flags)
             rets.append(r)
         return rets
 
 
-
 flags_t = BsvStruct(
     key=BsvBool(), ct=BsvBool(), ptct=BsvBool(), ad=BsvBool(), npub=BsvBool(), first=BsvBool(), last=BsvBool(), eoi=BsvBool()
 )
+
 
 def get_bytes(n_bytes, rand=False):
     if rand:
         return rand_bytes(n_bytes)
     return bytes(range(n_bytes))
+
 
 @cocotb.test()
 async def debug_enc(dut: HierarchyObject):
@@ -169,6 +175,7 @@ async def debug_dec(dut: HierarchyObject):
 
     for _ in range(1):
         await tb.clock_edge
+
 
 @cocotb.test()
 async def test_enc(dut: HierarchyObject):
