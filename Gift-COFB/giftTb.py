@@ -64,7 +64,7 @@ class RefCheckerTb(LwcRefCheckerTb):
 
 @cocotb.test()
 async def debug_enc(dut: HierarchyObject):
-    debug = True
+    debug = False
     max_in_stalls = 0
     min_out_stalls = 0
     max_out_stalls = 0
@@ -73,6 +73,11 @@ async def debug_enc(dut: HierarchyObject):
 
     await tb.start()
 
+    await tb.xenc_test(ad_size=1,  pt_size=0)
+    await tb.xenc_test(ad_size=0,  pt_size=1)
+    await tb.xenc_test(ad_size=1,  pt_size=3)
+    await tb.xenc_test(ad_size=1,  pt_size=1)
+    await tb.xenc_test(ad_size=1,  pt_size=4)
     await tb.xenc_test(ad_size=0,  pt_size=15)
     await tb.xenc_test(ad_size=1,  pt_size=4)
     await tb.xenc_test(ad_size=0, pt_size=XT_BS)
@@ -88,8 +93,11 @@ async def debug_enc(dut: HierarchyObject):
     await tb.xenc_test(ad_size=44, pt_size=0)
     await tb.xenc_test(ad_size=0,  pt_size=45)
     await tb.xenc_test(ad_size=65, pt_size=65)
+    await tb.xenc_test(ad_size=1, pt_size=0)
     await tb.xenc_test(ad_size=AD_BS + 1, pt_size=2*XT_BS + 1)
     await tb.xenc_test(ad_size=0, pt_size=XT_BS + 1)
+    await tb.xenc_test(ad_size=0,  pt_size=0)
+    await tb.xenc_test(ad_size=AD_BS+1, pt_size=XT_BS+1)
 
     await tb.launch_monitors()
     await tb.launch_drivers()
@@ -167,16 +175,17 @@ async def blanket_test_simple(dut: HierarchyObject):
     await tb.start()
 
     for ad_size, xt_size in itertools.product(short_sizes(AD_BS), short_sizes(XT_BS)):
-        await tb.xdec_test(ad_size=ad_size, ct_size=xt_size)
+        # await tb.xdec_test(ad_size=ad_size, ct_size=xt_size)
+        print(f"ad_size={ad_size} pt_size={xt_size}")
         await tb.xenc_test(ad_size=ad_size, pt_size=xt_size)
-        if tb.supports_hash:
-            await tb.xhash_test(xt_size)
+    #     if tb.supports_hash:
+    #         await tb.xhash_test(xt_size)
 
-    await tb.xdec_test(ad_size=1536, ct_size=0)
-    await tb.xenc_test(ad_size=1536, pt_size=0)
-    await tb.xdec_test(ad_size=0, ct_size=1536)
-    await tb.xenc_test(ad_size=0, pt_size=1536)
-    await tb.xdec_test(ad_size=0, ct_size=1535)
+    # await tb.xdec_test(ad_size=1536, ct_size=0)
+    # await tb.xenc_test(ad_size=1536, pt_size=0)
+    # await tb.xdec_test(ad_size=0, ct_size=1536)
+    # await tb.xenc_test(ad_size=0, pt_size=1536)
+    # await tb.xdec_test(ad_size=0, ct_size=1535)
 
     await tb.launch_monitors()
     await tb.launch_drivers()

@@ -194,15 +194,21 @@ class ValidReadyTester:
         self._forked_clock = None
 
     async def reset_dut(self, duration):
+        print(f"asserting ")
         self.reset <= self.reset_val
+        self.log.info(f"asserting reset to {self.reset_val} for {duration} time units.")
         await Timer(duration)
+        self.log.info(f"de-asserting reset")
         self.reset <= (not self.reset_val)
         await self.clock_edge
         self.log.debug("Reset complete")
 
     async def start(self):
         if not self.started:
+            self.log.info("starting clock...")
             clock = Clock(self.clock, period=self.clock_period)
             self._forked_clock = cocotb.fork(clock.start())
+            self.log.info("reseting...")
             await cocotb.fork(self.reset_dut(2.5*self.clock_period))
+            self.log.info("reset DONE")
             self.started = True

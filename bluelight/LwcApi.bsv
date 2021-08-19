@@ -19,15 +19,19 @@ endinterface
 
 typedef enum {
     GetPdiInstruction,
-    GetSdiInstruction,
     GetPdiHeader,
-    GetSdiHeader,
     GetPdiData,
     GetTagHeader,
     GetTagData,
-    EnqTagHeader,
-    GetSdiData
-} InputState deriving (Bits, Eq, FShow);
+    EnqTagHeader
+} PdiState deriving (Bits, Eq, FShow);
+
+typedef enum {
+    SdiIdle,
+    SdiInstruction,
+    SdiHeader,
+    SdiData
+} SdiState deriving (Bits, Eq, FShow);
 
 typedef enum {
     SendHeader,
@@ -35,6 +39,45 @@ typedef enum {
     VerifyTag,
     SendStatus
 } OutputState deriving (Bits, Eq, FShow);
+
+typedef enum {
+    AD          = 4'b0001,
+    Plaintext   = 4'b0100,
+    Ciphertext  = 4'b0101,
+    Npub        = 4'b1101,
+    HashMessage = 4'b0111,
+    Key         = 4'b1100,
+    Tag         = 4'b1000,
+    Digest      = 4'b1001
+} SegmentType deriving (Bits, Eq, FShow);
+
+// LSB of LWC instruction
+// typedef enum {
+//     ACTKEY  = 4'b111, // -> 01
+//     ENC     = 4'b010, // -> 10
+//     DEC     = 4'b011, // -> 11
+//     HASH    = 4'b000  // -> 00
+// } OpCode deriving (Bits, Eq, FShow);
+// only CoreWord (8, 16, 32 bits) needed for instruction
+typedef Bit#(3) OpCode;
+function OpCode getOpcode(CoreWord w);
+    Bit#(4) op4 = truncateLSB(w);
+    return unpack(truncate(op4));
+endfunction
+
+function Bool isActKey(OpCode op);
+    // thrid bit 1, on pdi, it's ACTKEY! (LDKEY is on sdi only)
+    return op[2] == 1'b1;
+endfunction
+
+function Bool isHash(OpCode op);
+    return op[1] == 1'b0;
+endfunction
+
+function Bool isDecIfNotActKey(OpCode op);
+    return op[0] == 1'b1;
+endfunction
+
 
 // Segment header
 typedef UInt#(32) Header;
@@ -62,71 +105,82 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     let pdiGet = fifoToGet(pdiReceiver.out).get;
     let sdiGet = fifoToGet(sdiReceiver.out).get;
 
-    Reg#(Bit#(14)) inWordCounter    <- mkRegU;
-    Reg#(Bit#(14)) outCounter       <- mkRegU;
-    Reg#(Bit#(2))  finalRemainBytes <- mkRegU;
-    Reg#(Bit#(2))  outRemainder     <- mkRegU;
+    Reg#(Bit#(14)) pdiCounter                    <- mkRegU;
+    Reg#(Bit#(TLog#(CryptoKeyWords))) sdiCounter <- mkRegU;
+    Reg#(Bit#(14)) outCounter                    <- mkRegU;
+    Reg#(Bit#(2))  finalRemainBytes              <- mkRegU;
+    Reg#(Bit#(2))  outRemainder                  <- mkRegU;
 
     Reg#(Bool) inSegLast   <- mkRegU; // last segment
     Reg#(Bool) outSegLast  <- mkRegU; // last segment
     Reg#(Bool) inSegEoT    <- mkRegU; // last segment of its type
+    Reg#(Bool) newKey      <- mkRegU; // should receive and use a new key
     Reg#(Bool) statFailure <- mkReg(False); // status use in output
 
     Reg#(SegmentType) inSegType   <- mkRegU;
     Reg#(SegmentType) outSegType  <- mkRegU;
 
+    let pdiState <- mkReg(GetPdiInstruction);
+    let sdiState <- mkReg(SdiIdle);
+    let outState <- mkReg(SendHeader);
+
     FIFO#(Header) headersFifo <- mkPipelineFIFO;
     FIFO#(CoreWord) tagFifo <- mkPipelineFIFO;
 
-    let inState  <- mkReg(GetPdiInstruction);
-    let outState <- mkReg(SendHeader);
-
     let doSender <- mkBusSenderWL(?);
 
-    let inWordCounterMsbZero = inWordCounter[13:1] == 0;
+    let inWordCounterMsbZero = pdiCounter[13:1] == 0;
     let outCounterMsbZero = outCounter[13:1] == 0;
 
-    function OpCode getOpcode(CoreWord w);
-        Bit#(4) op4 = truncateLSB(w);
-        return unpack(truncate(op4));
-    endfunction    
+    let last_of_seg = inWordCounterMsbZero && ((pdiCounter[0] == 0) || (finalRemainBytes == 0));
 
-    function Bool instructionIsActKey(CoreWord w); // only CoreWord (8, 16, 32 bits) needed for instruction
-        // thrid bit 1, on pdi, it's ACTKEY! (LDKEY is on sdi only)
-        return pack(getOpcode(w))[2] == 1'b1;
-    endfunction
+//===================================================== Rules =========================================================
+
+//------------------------------------------------------ SDI ----------------------------------------------------------
+    (* fire_when_enabled *)
+    rule get_sdi_inst if (sdiState == SdiInstruction && pdiState != GetPdiInstruction);
+        let w <- sdiGet;
+        sdiState <= SdiHeader;
+    endrule
 
     (* fire_when_enabled *)
-    rule rl_pdi_instruction if (inState == GetPdiInstruction);
+    rule get_sdi_hdr if (sdiState == SdiHeader && pdiState != GetPdiInstruction);
+        let w <- sdiGet;
+        sdiCounter       <= fromInteger(valueof(CryptoKeyWords) - 1);
+        sdiState <= SdiData;
+    endrule
+
+    (* fire_when_enabled *)
+    rule feed_core_sdi if (sdiState == SdiData && pdiState != GetPdiInstruction);
+        let w <- sdiGet;
+`ifdef LWC_DEBUG
+        $displayh("rl_feed_core_sdi: key word: ", w);
+`endif
+        sdiCounter <= sdiCounter - 1;
+        let last = sdiCounter == 0;
+
+        cryptoCore.key (lwcSwapEndian(w), last); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
+
+        if (last) sdiState <= SdiIdle;
+    endrule
+
+//------------------------------------------------------ PDI ----------------------------------------------------------
+    (* fire_when_enabled *)
+    rule pdi_instruction if (pdiState == GetPdiInstruction);
         let w <- pdiGet;
-        inState <= instructionIsActKey(w) ? GetSdiInstruction : GetPdiHeader;
-        cryptoCore.init(getOpcode(w));
+        let op_code = getOpcode(w);
+        if (isActKey(op_code)) begin
+            sdiState <= SdiInstruction;
+            newKey <= True;
+        end else begin
+            pdiState <= GetPdiHeader;
+            cryptoCore.init (newKey, isDecIfNotActKey(op_code), isHash(op_code));
+            newKey <= False; // reset for next init
+        end
     endrule
 
     (* fire_when_enabled *)
-    rule rl_get_sdi_inst if (inState == GetSdiInstruction);
-        let w <- sdiGet;
-        inState <= GetSdiHeader;
-        endrule
-
-    (* fire_when_enabled *)
-    rule rl_get_sdi_hdr if (inState == GetSdiHeader);
-        let w <- sdiGet;
-        Header hdr = unpack(w);
-        let len = headerLen(hdr);
-
-        match {.hi, .lo} = split(len);
-        inWordCounter    <= hi;
-        finalRemainBytes <= lo;
-        inSegLast        <= True;
-        inSegEoT         <= True;
-
-        cryptoCore.process(headerType(hdr), len == 0, False);
-        inState <= GetSdiData;
-    endrule
-
-    (* fire_when_enabled *)
-    rule rl_get_pdi_hdr if (inState == GetPdiHeader);
+    rule get_pdi_hdr if (pdiState == GetPdiHeader);
         let w <- pdiGet;
         Header hdr = unpack(w);
         let typ  = headerType(hdr);
@@ -136,103 +190,98 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
 
         inSegType <= typ;
         inSegEoT  <= eot;
-        // $display("Got header: typ: ", fshow(typ), ", len: ", len, " eot:", eot, " last:", last);
+`ifdef LWC_DEBUG
+        $display("Got header: typ: ", fshow(typ), ", len: ", len, " eot:", eot, " last:", last);
+`endif
 
-        inWordCounter    <= len[15:2];
+        pdiCounter    <= len[15:2];
         finalRemainBytes <= len[1:0]; 
         inSegLast        <= last;
 
-        case (typ) matches
-            Ciphertext:
-                headersFifo.enq(make_header(Plaintext,  eot,  True,  len));
-            Plaintext:
-                headersFifo.enq(make_header(Ciphertext, eot,  False, len));
-            HashMessage &&& last:
-                headersFifo.enq(make_header(Digest, True, True, fromInteger(crypto_hash_bytes)));
-        endcase
-
         let empty = len == 0;
-        cryptoCore.process(typ, empty, headerEoI(hdr));
+
+        let isPtCt = pack(typ)[3:1] == 3'b010;
+        let isPt   = pack(typ)[0] == 1'b0;
+        let isNpub = pack(typ)[3] == 1'b1;
+        let isAD   = pack(typ)[2] == 1'b0;
+        let isHM   = pack(typ)[1] == 1'b1;
+        let isCt   = isPtCt && !isPt;
+
+        if(isPtCt)
+            headersFifo.enq(make_header(isPt ? Ciphertext : Plaintext, eot,  !isPt, len));
+        else if (isHM && last) // mutually exclusive but scheduler doesn't know about the encoding, therefore need else
+            headersFifo.enq(make_header(Digest, True, True, fromInteger(crypto_hash_bytes)));
+
+        cryptoCore.anticipate (isNpub, isAD, isPt, isCt, empty, headerEoI(hdr));
 
         if (empty) begin
-            if(eot && typ == Ciphertext)
-                inState <= GetTagHeader;
+            if(eot && isCt)
+                pdiState <= GetTagHeader;
             else if (last)
-                inState <= (typ == Plaintext) ? EnqTagHeader : GetPdiInstruction;
+                pdiState <= isPt ? EnqTagHeader : GetPdiInstruction;
             // otherwise: get more PDI headers
         end else
-          inState <= GetPdiData;
-    endrule
-
-    let last_of_seg = inWordCounterMsbZero && ((inWordCounter[0] == 0) || (finalRemainBytes == 0));
-
-    (* fire_when_enabled *)
-    rule rl_feed_core_sdi if (inState == GetSdiData);
-        let w <- sdiGet;
-        // $displayh("rl_feed_core_SDI: got (key) w=", w);
-        inWordCounter <= inWordCounter - 1;
-
-        let lot = last_of_seg && inSegEoT;
-
-        cryptoCore.bdi.enq( BdIO {word: lwcSwapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
-
-        if (last_of_seg) inState <=  GetPdiInstruction;
+            pdiState <= GetPdiData;
     endrule
 
     (* fire_when_enabled *)
-    rule rl_feed_core_pdi if (inState == GetPdiData);
+    rule feed_core_pdi if (pdiState == GetPdiData);
         let w <- pdiGet;
-        // $displayh("rl_feed_core: got w=", w);
-        inWordCounter <= inWordCounter - 1;
+`ifdef LWC_DEBUG
+        $displayh("rl_feed_core: got w=", w);
+`endif
+        pdiCounter <= pdiCounter - 1;
 
-        let last_of_seg = inWordCounterMsbZero && ((inWordCounter[0] == 0) || (finalRemainBytes == 0));
-        let lot = last_of_seg && inSegEoT;
+        let last = last_of_seg && inSegEoT;
 
-        cryptoCore.bdi.enq( BdIO {word: lwcSwapEndian(w), lot: lot, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
+        cryptoCore.bdi( BdIO {word: lwcSwapEndian(w), last: last, padarg: finalRemainBytes} ); // 0 -> no padding 1 -> 3, 2-> 2, 3-> 1
 
         if (last_of_seg) begin
             if (inSegEoT && inSegType == Plaintext)
-                inState <= EnqTagHeader;
+                pdiState <= EnqTagHeader;
             else if (inSegEoT && inSegType == Ciphertext)
-                inState <= GetTagHeader;
+                pdiState <= GetTagHeader;
             else
-                inState <= inSegLast ? GetPdiInstruction : GetPdiHeader;
+                pdiState <= inSegLast ? GetPdiInstruction : GetPdiHeader;
         end
         endrule
 
         (* fire_when_enabled *)
-        rule rl_get_tag_hdr if (inState == GetTagHeader);
+        rule get_tag_hdr if (pdiState == GetTagHeader);
         let w      <- pdiGet;
         Header hdr = unpack(w);
         let len    = headerLen(hdr);
 
-        inWordCounter <= len[15:2];
+        pdiCounter <= len[15:2];
 
-        inState <= GetTagData;
-
-    // $display("GetTagHeader Got header: ", ", len: ", len);
+        pdiState <= GetTagData;
+`ifdef LWC_DEBUG
+    $display("GetTagHeader Got header: ", ", len: ", len);
+`endif
     endrule
 
     (* fire_when_enabled *)
-    rule rl_get_tag_data if (inState == GetTagData);
+    rule get_tag_data if (pdiState == GetTagData);
         let w <- pdiGet;
-        // $displayh("rl_feed_core: got w=", w);
-        inWordCounter <= inWordCounter - 1;
+`ifdef LWC_DEBUG
+        $displayh("rl_feed_core: got w=", w);
+`endif
+        pdiCounter <= pdiCounter - 1;
         tagFifo.enq(w);
 
         if (inWordCounterMsbZero)
-            inState <= GetPdiInstruction;
+            pdiState <= GetPdiInstruction;
         endrule
 
     (* fire_when_enabled *)
-    rule rl_enq_tag if (inState == EnqTagHeader); // only in encrypt, after last Plaintext was read
+    rule enq_tag if (pdiState == EnqTagHeader); // only in encrypt, after last Plaintext was read
         headersFifo.enq(make_header(Tag, True, True, fromInteger(crypto_abytes)));
-        inState <= GetPdiInstruction;
+        pdiState <= GetPdiInstruction;
     endrule
 
     /// output ///
     (* fire_when_enabled *) // ???
-    rule rl_out_header if (outState == SendHeader);
+    rule out_header if (outState == SendHeader);
         headersFifo.deq;
         let h = headersFifo.first;
         let len = headerLen(h);
@@ -260,7 +309,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     endrule
 
     (* fire_when_enabled *)
-    rule rl_verify_tag if (outState == VerifyTag);
+    rule verify_tag if (outState == VerifyTag);
         tagFifo.deq;
         cryptoCore.bdo.deq;
         let intag = tagFifo.first;
@@ -268,10 +317,14 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
 
         let sw = lwcSwapEndian(cryptoCore.bdo.first.word);
 
-        // $display("Verifytag got tag:%h core:%h", intag, sw);
+`ifdef LWC_DEBUG
+        $display("Verifytag got tag:%h core:%h", intag, sw);
+`endif
 
         if (intag != sw) begin
-            // $displayh("Tag mismatch: %h != %h ", intag, sw);
+`ifdef LWC_DEBUG
+            $displayh("Tag mismatch: %h != %h ", intag, sw);
+`endif
             statFailure <= True;
         end
 
@@ -280,15 +333,14 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     endrule
 
     (* fire_when_enabled *)
-    rule rl_sendout_data if (outState == SendData);
+    rule sendout_data if (outState == SendData);
         cryptoCore.bdo.deq;
         let word = cryptoCore.bdo.first.word;
         let padarg = cryptoCore.bdo.first.padarg;
-        let lot = cryptoCore.bdo.first.lot;
+        let last = cryptoCore.bdo.first.last;
         let pw = lwcPadWord(word, padarg);
-        doSender.in.enq(CoreWordWithLast { data: lwcSwapEndian(lot ? pw : word), last: False} );
-        let last_of_seg = outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0));
-        if (last_of_seg) begin
+        doSender.in.enq(CoreWordWithLast { data: lwcSwapEndian(last ? pw : word), last: False} );
+        if (outCounterMsbZero && ((outCounter[0] == 0) || (outRemainder == 0))) begin
             if (outSegLast)
                 if (outSegType == Plaintext) begin
                     outCounter <= 4;
@@ -302,7 +354,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
     endrule
 
     (* fire_when_enabled *)
-    rule rl_out_status if (outState == SendStatus);
+    rule out_status if (outState == SendStatus);
         doSender.in.enq(CoreWordWithLast { data: {3'b111, pack(statFailure), 28'b0}, last: True });
         statFailure <= False;
         outState <= SendHeader;

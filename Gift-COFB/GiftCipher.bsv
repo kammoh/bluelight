@@ -90,7 +90,6 @@ function GiftState xor_topbar_block(Block s1, HalfBlock s2);
 endfunction
 
 typedef struct{
-    Bool key;
     Bool ct;
     Bool ptct;
     Bool ad;
@@ -105,6 +104,18 @@ typedef enum {
     Permute,
     Squeeze // tag
 } State deriving (Bits, Eq, FShow);
+
+
+interface CipherIfc#(numeric type n_bytes, type flags_type);
+    // optional operation-specific initialization
+    method Action init(Bool new_key, Bool decrypt, Bool hash);
+
+    method Action storeKey(CoreWord w);
+    // block in/out
+    method ActionValue#(BlockOfSize#(n_bytes)) blockUp(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
+    // block out
+    method ActionValue#(BlockOfSize#(n_bytes)) blockDown;
+endinterface
 
 module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFactor, perm_cycles, CipherRounds), Add#(a__, 1, UnrollFactor));
     Reg#(GiftState) giftState <- mkRegU;
@@ -164,7 +175,13 @@ module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFac
             keyState <= nextKS;
     endrule
 
-    method Action init(OpCode op);
+    method Action init(Bool new_key, Bool decrypt, Bool hash);
+    endmethod
+
+    method Action storeKey(CoreWord w) if (state == Idle);
+        match {.hi, .lo} = split(w);
+        let ks0 = shiftInAtN(keyState,  swapEndian(lo));
+        keyState <= shiftInAtN(ks0,  swapEndian(hi));
     endmethod
 
     method ActionValue#(Block) blockUp(Block block, ByteValids valids, Flags flags) if (state == Idle);
@@ -179,33 +196,30 @@ module mkGiftCipher (CipherIfc#(GiftBlockBytes, Flags)) provisos (Mul#(UnrollFac
         else if(flags.ad && flags.eoi)
             emptyM <= True; // don't unset if previously set
 
-        if (flags.key)
-            keyState <= toKeyState(block);
+        if (flags.npub)
+            giftState <= toGiftState(block);
         else begin
-            if (flags.npub)
-                giftState <= toGiftState(block);
-            else begin
-                Bool fullBlock = last(valids);
-                let delta1 = flags.ad && flags.first ? take(y) : delta;
-                HalfBlock offsetX2 = double(delta1);
-                let offsetX3 = unpack(pack(offsetX2) ^ pack(delta1));
-                let offsetX9 = triple(offsetX3);
-                let offset = flags.last ? (fullBlock && !emptyMsg? offsetX3 : offsetX9) : offsetX2;
-                
-                if(lastAdEmptyM)
-                    giftState <= toGiftState(x);
-                else if(emptyMsg)
-                    giftState <= xor_topbar_block(giftStateToBlock(giftState), offset);
-                else
-                    giftState <= xor_topbar_block(x, offset);
-                delta <= offset;
-            end
-            roundConstant <= fromInteger(1);
-            if (!lastAdEmptyM)
-                state <= Permute;
-            postPermuteState <= flags.last && flags.ptct ? Squeeze : Idle;
-            roundCounter <= 0;
+            Bool fullBlock = last(valids);
+            let delta1 = flags.ad && flags.first ? take(y) : delta;
+            HalfBlock offsetX2 = double(delta1);
+            let offsetX3 = unpack(pack(offsetX2) ^ pack(delta1));
+            let offsetX9 = triple(offsetX3);
+            let offset = flags.last ? (fullBlock && !emptyMsg? offsetX3 : offsetX9) : offsetX2;
+            
+            if(lastAdEmptyM)
+                giftState <= toGiftState(x);
+            else if(emptyMsg)
+                giftState <= xor_topbar_block(giftStateToBlock(giftState), offset);
+            else
+                giftState <= xor_topbar_block(x, offset);
+            delta <= offset;
         end
+        roundConstant <= fromInteger(1);
+        if (!lastAdEmptyM)
+            state <= Permute;
+        postPermuteState <= flags.last && flags.ptct ? Squeeze : Idle;
+        roundCounter <= 0;
+
         return c;
     endmethod
 

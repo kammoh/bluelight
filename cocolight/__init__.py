@@ -1,22 +1,14 @@
-
-from logging import Logger
-from math import ceil
-from types import SimpleNamespace
-from typing import List, Union
-import random
-from queue import Queue
+from typing import List, Optional, Union
 
 from cocotb.utils import get_sim_time
 from .lwc_api import LwcAead, LwcHash
 
-import cocotb
-from cocotb.clock import Clock
-from cocotb.result import TestError, TestFailure
 from cocotb.handle import SimHandleBase
 from cocotb.triggers import (First, Join, ReadOnly, RisingEdge, Timer)
 
 from .hw_api import Instruction, Segment, SegmentType, OpCode, Status
 from .utils import rand_bytes
+from .valid_ready_tester import ValidReadyTester, ValidReadyDriver, ValidReadyMonitor
 
 
 def chunks(l, n):
@@ -35,204 +27,16 @@ def show_messages(messages, width):
         print(preamble + f'\n{" "*len(preamble)}'.join(lines))
 
 
-class ForkJoinBase:
-    def __init__(self) -> None:
-        self._forked = None
-        self.name = None
-        self.log: Logger = None
-
-    def run(self):
-        ...
-
-    async def fork(self):
-        self._forked = cocotb.fork(self.run())
-        self.log.debug(f"forked {self.name}")
-
-    async def join(self, timeout=None):
-        if self._forked is not None:
-            if timeout:
-                timer = Timer(timeout)
-                first = await First(timer, self._forked)
-                if first is timer:
-                    self.log.error(
-                        f"Joining {self.name} timed out! (timeout={timeout})")
-                    raise TestFailure(f"timeout")
-            else:
-                await Join(self._forked)
-            self.log.debug(f"joined {self.name}")
-            self._forked = None
-        else:
-            self.log.error(
-                f"{self.name} joined without being previously forked!")
-
-
-class ValidReadyDriver(ForkJoinBase):
-    def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0) -> None:
-        super().__init__()
-        self._valid = getattr(dut, f'{name}_valid')
-        self._ready = getattr(dut, f'{name}_ready')
-        self.name = name
-        self.dut = dut
-        self.log = dut._log
-        self.clock = clock
-        self._debug = debug
-        self.clock_edge = RisingEdge(clock)
-        self.queue: Queue[List[int]] = Queue()
-        self.max_stalls = max_stalls
-        # dut._id(f"{sig_name}", extended=False) ?
-        self._data_sig = getattr(self.dut, f'{self.name}_data')
-        self.width = len(self._data_sig)
-        self._valid.setimmediatevalue(0)
-
-    async def run(self):
-        signal_name = self._data_sig._name
-        while not self.queue.empty():
-            message = self.queue.get()
-            l = len(message)
-            u = "word"
-            if l > 1:
-                u += "s"
-            self.log.debug(f'Putting {l} {u} on {signal_name}')
-            for word in message:
-                r = random.randint(-self.max_stalls, self.max_stalls)
-                if r > 0:
-                    self._valid <= 0
-                    for _ in range(r):
-                        await self.clock_edge
-
-                self._valid <= 1
-                word = int(word)
-                self._data_sig <= word
-                await ReadOnly()
-                while not self._ready.value:
-                    await self.clock_edge
-                    await ReadOnly()
-                await self.clock_edge
-            self._valid <= 0
-
-
-class ValidReadyMonitor(ForkJoinBase):
-    def __init__(self, dut: SimHandleBase, name: str, clock: SimHandleBase, debug=False, max_stalls=0, min_stalls=None) -> None:
-        super().__init__()
-        self._valid = getattr(dut, f'{name}_valid')
-        self._ready = getattr(dut, f'{name}_ready')
-        self.name = name
-        self.dut = dut
-        self.log = dut._log
-        self.clock = clock
-        self.clock_edge = RisingEdge(clock)
-        self._data_signal = getattr(self.dut, f'{self.name}_data')
-        self.width = len(self._data_signal)
-        self.failures = 0
-        self.num_received_words = 0
-        self._debug = debug
-        self.queue: Queue[List[int]] = Queue()
-        self.max_stalls = max_stalls
-        self.min_stalls = min_stalls if min_stalls is not None else -self.max_stalls
-        self._ready.setimmediatevalue(0)
-
-    # TODO just single "data" field implemented
-
-    async def run(self):
-        width = len(self._data_signal)
-        digits = ceil(width / 4)
-
-        num_verified_messages = 0
-
-        if self.queue.empty():
-            self.log.error(f"Monitor {self.name} is not expecting any data!")
-            raise TestError
-
-        # await ReadOnly()
-        while not self.queue.empty():
-            message = self.queue.get()
-            num_verified_messages += 1
-            self.log.info(
-                f"Verifying message #{num_verified_messages} ({len(message)} words) on '{self.name}'")
-            for exp in message:
-                # TODO add custom ready generator
-                r = random.randint(self.min_stalls, self.max_stalls)
-                if r > 0:
-                    self._ready <= 0
-                    for _ in range(r):
-                        await self.clock_edge
-
-                self._ready <= 1
-                await ReadOnly()
-                while self._valid.value != 1:
-                    await self.clock_edge  # TODO optimize by wait for valid = 1 if valid was != 0 ?
-                    await ReadOnly()
-
-                received = self._data_signal.value
-                self.num_received_words += 1
-
-                exp = f'{exp:0{digits}x}'
-                try:
-                    received = f'{int(received):0{digits}x}'
-                except:  # has Xs etc
-                    received = str(received)  # Note: binary string with Xs
-
-                # TODO add support for don't cares (X/-) in the expected words (should be binary string then?)
-                if received != exp:
-                    self.log.error(
-                        f"[monitor:{self.name}] received: {received} expected: {exp}")
-                    self.failures += 1
-                await self.clock_edge
-
-        self._ready <= 0
-
-    async def join(self, timeout=None):
-        await super().join(timeout=timeout)
-
-        if self.num_received_words > 0:
-            self.log.info(
-                f"Monitor: '{self.name}' joined after receiving {self.num_received_words} words")
-        else:
-            self.log.error(
-                f"Monitor: '{self.name}' joined without receiving any data")
-            raise TestError
-
-        if self.failures > 0:
-            self.log.error(
-                f"[monitor:{self.name}] Number of Failures: {self.failures}")
-            raise TestFailure
-
-
-class Tb:
+class Tb(ValidReadyTester):
     def __init__(self, dut: SimHandleBase, input_buses: List[str], output_buses: List[str], debug=False, clk_period=10, max_in_stalls=0, max_out_stalls=0, min_out_stalls=0) -> None:
-        self.dut = dut
-        self.log = dut._log
-        self.started = False
+        reset_val = 1
+        reset_name = 'rst'
         if hasattr(dut, 'rst_n'):
             print("rst_n port detected. Using active-low reset!")
-            self.reset_val = 0
-            self.reset = dut.rst_n
-        else:
-            self.reset_val = 1
-            self.reset = dut.rst
-        self.clock = dut.clk
-        self.clock_period = clk_period
-        self.clock_edge = RisingEdge(self.clock)
-        self.drivers = SimpleNamespace(
-            **{k: ValidReadyDriver(dut, k, self.clock, debug=debug, max_stalls=max_in_stalls) for k in input_buses})
-        self.monitors = SimpleNamespace(**{bus_name: ValidReadyMonitor(
-            dut=dut, name=bus_name, clock=self.clock, debug=debug, max_stalls=max_out_stalls, min_stalls=min_out_stalls) for bus_name in output_buses})
-
-        self._forked_clock = None
-
-    async def reset_dut(self, duration):
-        self.reset <= self.reset_val
-        await Timer(duration)
-        self.reset <= (not self.reset_val)
-        await self.clock_edge
-        self.log.debug("Reset complete")
-
-    async def start(self):
-        if not self.started:
-            clock = Clock(self.clock, period=self.clock_period)
-            self._forked_clock = cocotb.fork(clock.start())
-            await cocotb.fork(self.reset_dut(2.5*self.clock_period))
-            self.started = True
+            reset_val = 0
+            reset_name = 'rst_n'
+        super().__init__(dut, input_buses, output_buses, debug=debug, clock_name='clk', clk_period=clk_period, reset_name=reset_name,
+                         reset_val=reset_val, max_in_stalls=max_in_stalls, max_out_stalls=max_out_stalls, min_out_stalls=min_out_stalls)
 
     async def launch_monitors(self):
         for mon in self.monitors.__dict__.values():
@@ -353,7 +157,7 @@ class LwcRefCheckerTb(LwcTb):
         ct, tag = self.ref.encrypt(pt, ad, npub, key)
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
-                  f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')
+                  f'pt={pt.hex()}\nct={ct.hex()}\ntag={tag.hex()}\n')
         await self.encrypt_test(key, npub, ad, pt, ct, tag)
 
     async def xdec_test(self, ad_size, ct_size):
@@ -369,7 +173,7 @@ class LwcRefCheckerTb(LwcTb):
 
     async def xhash_test(self, hm_size):
         hm = self.gen_inputs(hm_size)
-        digest:bytes = self.ref.hash(hm)
+        digest: bytes = self.ref.hash(hm)
         if self.debug:
             print(f'message={hm.hex()}\ndigest={digest.hex()}')
         await self.hash_test(hm, digest=digest)

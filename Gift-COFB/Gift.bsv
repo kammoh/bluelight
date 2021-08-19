@@ -6,18 +6,19 @@ import GiftCipher :: *;
 import CryptoCore :: *;
 
 typedef enum {
-    InIdle, // waiting on process command
-    InBusy  // recieve from bdi
-} InputState deriving(Bits, Eq);
+    Init,
+    GetHeader,
+    GetBdi,
+    Tag
+} State deriving(Bits, Eq);
 
+(* synthesize *)
 module mkGift(CryptoCoreIfc);
     Byte cipherPadByte = 8'h80;
     let cipher <- mkGiftCipher;
     let inLayer <- mkInputLayerNoExtraPad(cipherPadByte);
     let outLayer <- mkOutputLayer;
-    let inState <- mkReg(InIdle);
-    let set_busy <- mkPulseWire;
-    let set_idle <- mkPulseWire;
+    let state <- mkReg(Init);
 
     Reg#(Bool) isKey <- mkRegU;
     Reg#(Bool) isCT <- mkRegU;
@@ -25,66 +26,80 @@ module mkGift(CryptoCoreIfc);
     Reg#(Bool) isNpub <- mkRegU;
     Reg#(Bool) isAD <- mkRegU;
     Reg#(Bool) isEoI <- mkRegU;
-    Reg#(Bool) first <- mkRegU;
-    Reg#(Bool) last <- mkRegU;
+    Reg#(Bool) isFirstBlock <- mkRegU;
+    Reg#(Bool) isLastBlock <- mkRegU;
+    Reg#(Bool) haveKey <- mkReg(False);
+    let set_isfirst <- mkPulseWire;
+    let unset_isfirst <- mkPulseWire;
 
   // ==================================================== Rules =====================================================
-
     (* fire_when_enabled *)
-    rule rl_change_state if (set_busy || set_idle);
-        if (set_busy)
-            inState <= InBusy;
-        else if (set_idle)
-            inState <= InIdle;
+    rule update_isfirst if(set_isfirst || unset_isfirst);
+        if (set_isfirst)
+            isFirstBlock <= True;
+        else if (unset_isfirst)
+            isFirstBlock <= False;
     endrule
     
     (* fire_when_enabled *)
-    rule rl_encipher if (inState == InBusy);
+    rule encipher if (haveKey);
         match {.inBlock, .valids} <- inLayer.get;
-
-        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, ct:isCT, ptct:isPTCT, ad:isAD, npub:isNpub, first:first, last:last, eoi: isEoI});
+        let outBlock <- cipher.blockUp(inBlock, valids, Flags {ct:isCT, ptct:isPTCT, ad:isAD, npub:isNpub, first:isFirstBlock, last:isLastBlock, eoi: isEoI});
         if (isPTCT) outLayer.enq(outBlock, valids);
-        if (last) set_idle.send;
-        first <= False;
+        unset_isfirst.send();
     endrule
 
     (* fire_when_enabled *)
-    rule rl_squeeze_tag_or_digest;
+    rule squeeze_tag_or_digest if (state == Tag);
         let out <- cipher.blockDown;
         outLayer.enq(out, replicate(True));
-    endrule 
+        state <= Init;
+    endrule
+
 
   // ================================================== Interfaces ==================================================
 
-    method Action init(OpCode op);
+    method Action init(Bool new_key, Bool decrypt, Bool hash) if (state == Init);
+        state <= GetHeader;
+        if (new_key) haveKey <= False;
     endmethod
 
-    method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
+    method Action key(w, is_last) if (!haveKey && state != Init && state != Tag);
+        cipher.storeKey(w);
+        if (is_last) haveKey <= True;
+    endmethod
+
+    method Action anticipate (Bool npub, Bool ad, Bool pt, Bool ct, Bool empty, Bool eoi) if (state == GetHeader);
         // only AD, CT, PT, HM can be empty
-        if (empty)
+        let ptct = ct || pt;
+        if (empty) begin
+            if (ptct) state <= Tag;
             inLayer.put(unpack(zeroExtend(cipherPadByte)), True, False, 0, True);
-        set_busy.send;
-        first  <= True;
-        last   <= empty;
-        isKey  <= typ == Key;
-        isNpub <= typ == Npub;
-        isCT   <= typ == Ciphertext;
-        isAD   <= typ == AD;
-        isPTCT <= typ == Ciphertext || typ == Plaintext;
-        isEoI  <= eoi;
+        end else
+            state <= GetBdi;
+
+        set_isfirst.send();
+
+        isLastBlock  <= empty;
+        isNpub       <= npub;
+        isCT         <= ct;
+        isAD         <= ad;
+        isPTCT       <= ptct;
+        isEoI        <= eoi;
     endmethod
     
-    interface FifoIn bdi;
-        method Action enq(i) if (inState == InBusy);
-            inLayer.put(unpack(pack(i.word)), i.lot, i.lot && !isKey && !isNpub, i.padarg, False);
-            last <= i.lot;
-        endmethod
-    endinterface
+    method Action bdi(i) if (state == GetBdi);
+        inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
+        isLastBlock <= i.last;
+        if (i.last)
+            state <= isPTCT ? Tag : GetHeader;
+    endmethod
+
 
     interface FifoOut bdo;
         method deq = outLayer.deq;
         method first;
-            return BdIO {word: outLayer.first, lot: outLayer.isLast, padarg: 0};
+            return BdIO {word: outLayer.first, last: outLayer.isLast, padarg: 0};
         endmethod
         method notEmpty = outLayer.notEmpty;
     endinterface

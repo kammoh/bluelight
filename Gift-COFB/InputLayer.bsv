@@ -4,6 +4,8 @@ import Vector :: *;
 import CryptoCore :: *;
 import BluelightUtils :: *;
 
+import GiftRound :: *;
+
 // TODO option to use shift-register for large block sizes?
 
 function Bit#(4) padargToValids(Bool pad, PadArg padarg);
@@ -15,19 +17,25 @@ function Bit#(4) padargToValids(Bool pad, PadArg padarg);
     endcase;
 endfunction
 
-module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWordBytes, n_bytes), Add#(a__, 4, n_bytes), Add#(c__, 32, TMul#(n_bytes, 8)));
-    Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
-    Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
-    Reg#( Bit#(TLog#(block_words))) counter <- mkReg(0);
+typedef TDiv#(GiftBlockBytes, 4) BlockWords;
+
+// (* synthesize *)
+module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(GiftBlockBytes));// provisos (Mul#(BlockWords, CoreWordBytes, n_bytes), Add#(a__, 4, n_bytes), Add#(c__, 32, TMul#(n_bytes, 8)));
+    Reg#(Vector#(BlockWords, CoreWord)) block <- mkRegU;
+    Reg#(Vector#(BlockWords, Bit#(CoreWordBytes))) valids <- mkRegU;
+    Reg#( Bit#(TLog#(BlockWords))) counter <- mkReg(0);
     let closed <- mkReg(False);
     let needsPad <- mkReg(False); // only set with with closing word
     let full <- mkReg(False);
-    Bool lastPlace = counter == fromInteger(valueOf(block_words) - 1);
+    Bool lastPlace = counter == fromInteger(valueOf(BlockWords) - 1);
     let do_deq <- mkPulseWireOR;
     let do_close <- mkPulseWireOR;
     let needs_pad_set <- mkPulseWireOR;
     let needs_pad_unset <- mkPulseWireOR;
     RWire#(Tuple2#(CoreWord, Bit#(CoreWordBytes))) enq_wire <- mkRWireSBR;
+
+    let can_put = ((!closed && !full) || do_deq) && !needsPad;
+    let can_get = (closed && !needsPad) || full;
 
     (* fire_when_enabled *)
     rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
@@ -67,7 +75,7 @@ module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) pro
         needs_pad_unset.send();
     endrule
 
-    method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty) if (((!closed && !full) || do_deq) && !needsPad);
+    method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty) if (can_put);
         match {.padded, .paddedWord} = padWord(pack(word), padarg, cipherPadByte);
         enq_wire.wset(tuple2(pad ? unpack(paddedWord) : word, empty ? 0 : padargToValids(pad, padarg)));
         if (last) begin
@@ -76,13 +84,21 @@ module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) pro
         end
     endmethod
 
-    method ActionValue#(InLayerToCipher#(n_bytes)) get if ((closed && !needsPad) || full);
+    method ActionValue#(InLayerToCipher#(GiftBlockBytes)) get if (can_get);
         do_deq.send();
         return tuple2(unpack(pack(block)), unpack(pack(valids)));
     endmethod
 
     method Bool extraPad;
         return needsPad;
+    endmethod
+
+    method Bool canPut;
+        return can_put;
+    endmethod
+
+    method Bool canGet;
+        return can_get;
     endmethod
 endmodule
 

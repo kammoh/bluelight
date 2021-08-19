@@ -109,8 +109,8 @@ if args.gtkwave:
 
 
 BLUESPEC_PREFIX = os.environ.get('BLUESPEC_PREFIX')
-bsc_exec = os.path.join(BLUESPEC_PREFIX, 'bin',
-                        'bsc') if BLUESPEC_PREFIX else shutil.which("bsc")
+# bsc_exec = os.path.join(BLUESPEC_PREFIX, 'bin', 'bsc') if BLUESPEC_PREFIX else shutil.which("bsc")
+bsc_exec = shutil.which("bsc")
 
 if not BLUESPEC_PREFIX:
     BLUESPEC_PREFIX = os.path.dirname(os.path.dirname(bsc_exec))
@@ -140,12 +140,8 @@ if args.debug:
     bsc_flags += [
         '-keep-fires',
         '-keep-inlined-boundaries',
-        # '-show-schedule',
-        # '-sched-dot',
-        # '-sat-yices',
-        # '-remove-unused-modules',
-        # '-remove-false-rules',
-        # '-remove-starved-rules',
+        '-show-schedule',
+        '-sched-dot',
         # '-no-show-timestamps', # regenerated files should be the same
         # '-opt-undetermined-vals',
         # '-unspecified-to', 'X',
@@ -193,10 +189,10 @@ def bsc_generate_verilog():
     top_file = bluespec_sources[-1]
     top = rtl_settings['top']
     # if not args.debug: pretty messed up! do not use!
-    if vout_dir.exists():
-        shutil.rmtree(vout_dir)
-    if bsc_out.exists():
-        shutil.rmtree(bsc_out)
+    # if vout_dir.exists():
+    #     shutil.rmtree(vout_dir)
+    # if bsc_out.exists():
+    #     shutil.rmtree(bsc_out)
     vout_dir.mkdir(exist_ok=True)
     bsc_out.mkdir(exist_ok=True)
 

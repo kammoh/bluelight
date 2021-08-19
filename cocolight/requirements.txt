@@ -1,3 +1,4 @@
 cocotb
 cffi
 typeguard
+pyvcd

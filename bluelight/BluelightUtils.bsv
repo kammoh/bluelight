@@ -34,16 +34,10 @@ interface InputLayerIfc#(numeric type n_bytes);
     method ActionValue#(InLayerToCipher#(n_bytes)) get;
     (* always_ready *)
     method Bool extraPad;
+    method Bool canPut;
+    method Bool canGet;
 endinterface
 
-interface CipherIfc#(numeric type n_bytes, type flags_type);
-    // optional operation-specific initialization
-    method Action init(OpCode op);
-    // block in/out
-    method ActionValue#(BlockOfSize#(n_bytes)) blockUp(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
-    // block out
-    method ActionValue#(BlockOfSize#(n_bytes)) blockDown;
-endinterface
 
 interface OutputLayerIfc#(numeric type n_bytes);
     method Action enq(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids);
