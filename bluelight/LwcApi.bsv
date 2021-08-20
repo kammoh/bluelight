@@ -176,7 +176,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
             newKey <= True;
         end else begin
             pdiState <= GetPdiHeader;
-            cryptoCore.init (newKey, isDecIfNotActKey(op_code), isHash(op_code));
+            cryptoCore.init (OpFlags { new_key: newKey, decrypt: isDecIfNotActKey(op_code), hash: isHash(op_code)});
             newKey <= False; // reset for next init
         end
     endrule

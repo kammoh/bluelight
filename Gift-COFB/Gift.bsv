@@ -110,9 +110,9 @@ module mkGift(CryptoCoreIfc);
 
   // ================================================== Interface ==================================================
 
-    method Action init(Bool new_key, Bool decrypt, Bool hash) if (opState == OpIdle && inState == Init);
+    method Action init(OpFlags op) if (opState == OpIdle && inState == Init);
         inState <= GetHeader;
-        if (!new_key) opState <= OpAbsorb;
+        if (!op.new_key) opState <= OpAbsorb;
     endmethod
 
     method Action key(w, is_last) if (opState == OpIdle && inState != Init);

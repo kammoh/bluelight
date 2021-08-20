@@ -66,9 +66,15 @@ typedef struct{
     Bool eoi;   // end of input: The upcoming segment is the last input segment other than TAG.
 } HeaderFlags deriving(Bits, Eq, FShow);
 
+typedef struct {
+    Bool new_key; // operation requires a new key
+    Bool decrypt; // operation is decryption
+    Bool hash;    // operation is hashing
+} OpFlags deriving(Bits, Eq, FShow);
+
 interface CryptoCoreIfc;
     // initialize CC for the operation [Optional]
-    method Action init (Bool new_key, Bool decrypt, Bool hash);
+    method Action init (OpFlags flags);
 
     // meta-data, header
     // after fire, anticipate bdi words of this type, unless flags.empty == True.
