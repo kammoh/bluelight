@@ -1,10 +1,10 @@
 package BluelightUtils;
 
-import Vector :: *;
+import Vector     :: *;
 import CryptoCore :: *;
 
+export CryptoCore     :: *;
 export BluelightUtils :: *;
-export CryptoCore :: *;
 
 typedef Bit#(8) Byte;
 typedef Vector#(n_bytes, Byte) BlockOfSize#(numeric type n_bytes);

@@ -1,8 +1,11 @@
 package CryptoCore;
 
-import GetPut::*;
-import FIFOF::*;
-import Vector::*;
+import GetPut :: *;
+import FIFOF  :: *;
+import Vector :: *;
+
+export Vector     :: *;
+export CryptoCore :: *;
 
 `ifndef IO_WIDTH
 `define IO_WIDTH 32
@@ -52,6 +55,16 @@ typedef struct {
     CoreWord word;  // data word
 } BdIO deriving (Bits, Eq);
 
+typedef struct{
+    Bool npub;
+    Bool ad;
+    Bool pt;
+    Bool ct;
+    Bool ptct;
+    Bool hm;
+    Bool empty;
+    Bool eoi;
+} HeaderFlags deriving(Bits, Eq, FShow);
 
 interface CryptoCoreIfc;
     // initialize CC for the operation [Optional]
@@ -64,7 +77,7 @@ interface CryptoCoreIfc;
     // hm:    The upcoming segment is Hash Message.
     // empty: The upcoming segment is empty. No subsequent bdi calls will occur for this type.
     // eoi:   The upcoming segment is the last input segment other than TAG.
-    method Action anticipate (Bool npub, Bool ad, Bool pt, Bool ct, Bool empty, Bool eoi);
+    method Action anticipate (HeaderFlags flags);
 
     // Recieve a word of the key
     method Action key (CoreWord w, Bool last);

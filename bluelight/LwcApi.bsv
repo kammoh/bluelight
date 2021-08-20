@@ -1,12 +1,15 @@
 package LwcApi;
 
-import FIFO::*;
-import FIFOF::*;
-import SpecialFIFOs :: * ;
-import GetPut :: *;
+import FIFO         :: *;
+import FIFOF        :: *;
+import SpecialFIFOs :: *;
+import GetPut       :: *;
 
-import Bus :: *;
-import CryptoCore :: *;
+import Bus          :: *;
+import CryptoCore   :: *;
+
+export CryptoCore :: *;
+export LwcApi     :: *;
 
 typedef DataLast#(CoreWord) CoreWordWithLast;
 
@@ -77,7 +80,6 @@ endfunction
 function Bool isDecIfNotActKey(OpCode op);
     return op[0] == 1'b1;
 endfunction
-
 
 // Segment header
 typedef UInt#(32) Header;
@@ -212,7 +214,7 @@ module mkLwc#(CryptoCoreIfc cryptoCore, Bool ccIsLittleEndian, Bool ccPadsOutput
         else if (isHM && last) // mutually exclusive but scheduler doesn't know about the encoding, therefore need else
             headersFifo.enq(make_header(Digest, True, True, fromInteger(crypto_hash_bytes)));
 
-        cryptoCore.anticipate (isNpub, isAD, isPt, isCt, empty, headerEoI(hdr));
+        cryptoCore.anticipate (HeaderFlags {npub: isNpub, ad: isAD, pt: isPt, ct: isCt, ptct: isPtCt, hm: isHM, empty: empty, eoi: headerEoI(hdr)});
 
         if (empty) begin
             if(eot && isCt)

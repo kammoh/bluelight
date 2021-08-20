@@ -133,31 +133,30 @@ module mkGift(CryptoCoreIfc);
         if (is_last) opState <= OpAbsorb;
     endmethod
 
-    method Action anticipate (Bool npub, Bool ad, Bool pt, Bool ct, Bool empty, Bool eoi) if (inState == GetHeader);
+    method Action anticipate (HeaderFlags flags) if (inState == GetHeader);
         // only AD, CT, PT, HM can be empty
-        let ptct = ct || pt;
-        if (empty) begin
+        if (flags.empty) begin
             inLayer.put(unpack(zeroExtend(cipherPadByte)), True, False, 0, True);
-            if (ptct) inState <= Init;
+            if (flags.ptct) inState <= Init;
         end else
             inState <= GetBdi;
 
-        if (ad) set_isfirst.send();
+        if (flags.ad) set_isfirst.send();
 
-        isLastBlock  <= empty;
-        isNpub       <= npub;
-        isCT         <= ct;
-        isAD         <= ad;
-        isPTCT       <= ptct;
-        isEoI        <= eoi;
+        isLastBlock  <= flags.empty;
+        isNpub       <= flags.npub;
+        isCT         <= flags.ct;
+        isAD         <= flags.ad;
+        isPTCT       <= flags.ptct;
+        isEoI        <= flags.eoi;
 
-        if (npub)
-            emptyM <= eoi; // set and unset, either new or reused key
-        else if (ad && eoi)
+        if (flags.npub)
+            emptyM <= flags.eoi; // set and unset, either new or reused key
+        else if (flags.ad && flags.eoi)
             emptyM <= True; // don't unset if previously set
 
-        emptyMsg <= emptyM && ptct;
-        lastAdEmptyM <= ad && empty && (eoi || emptyM);
+        emptyMsg <= emptyM && flags.ptct;
+        lastAdEmptyM <= flags.ad && flags.empty && (flags.eoi || emptyM);
 
     endmethod
     
