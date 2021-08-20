@@ -167,9 +167,6 @@ else:
         '-no-show-timestamps', # regenerated files should be the same
         '-opt-undetermined-vals',
         '-unspecified-to', 'X',
-        '-vpp',
-        '-D', 'BSV_POSITIVE_RESET',
-        '-D', 'BSV_NO_INITIAL_BLOCKS,'
     ]
 
 
