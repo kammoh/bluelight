@@ -4,7 +4,6 @@ import GiftRound   :: *;
 import InputLayer  :: *;
 import OutputLayer :: *;
 import GiftCipher  :: *;
-import CryptoCore  :: *;
 
 typedef enum {
     Init,
@@ -20,13 +19,6 @@ typedef enum {
 } OpState deriving(Bits, Eq);
 
 typedef TDiv#(CipherRounds, UnrollFactor) PermCycles;
-
-function KeyState restore_keystate(KeyState nextKS);
-    KeyState swapped_ks = newVector;
-    for (Integer i = 0; i < 8; i = i + 1)
-        swapped_ks[i] = swapEndian(i % 2 == 0 ? rotateRight(nextKS[i], 4'b0) : nextKS[i]);
-    return swapped_ks;
-endfunction
 
 // (* synthesize *)
 module mkGift(CryptoCoreIfc);

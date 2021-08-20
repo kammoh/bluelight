@@ -5,6 +5,7 @@ from cocotb_test.simulator import Verilator
 
 from pathlib import Path
 import subprocess
+from subprocess import PIPE
 import sys
 import os
 import re
@@ -41,6 +42,28 @@ xeda_design = next(
 rtl_settings = xeda_design['rtl']
 bluespec_sources = [f for f in rtl_settings['sources']
                     if f.endswith('.bsv') or f.endswith('.bs')]
+
+def get_bsc_flags(cmd=['bsc']):
+    def convert_value(v: str):
+        list_regex = re.compile(r'\s*\[(.*)\]\s*')
+        str_regex = re.compile(r'\s*"(.*)"\s*')
+        match = list_regex.match(v)
+        if match:
+            return [ convert_value(s) for s in match.group(1).split(',') ]
+        match = str_regex.match(v)
+        if match:
+            return match.group(1)
+        return v
+
+    cmd.append('-print-flags-raw')
+    kv_regex = re.compile(r'^\s+(\w+)\s=\s(.*),\s*$')
+    flags = {}
+    for line in subprocess.run(cmd, stdout=PIPE, check=True).stdout.decode('utf-8').splitlines():
+        match = kv_regex.match(line)
+        if match:
+            flags[match.group(1)] = convert_value(match.group(2))
+    return flags
+
 
 if args.gtkwave:
     import vcd
@@ -125,8 +148,6 @@ lib_paths.insert(0, '+')
 vout_dir = Path.cwd() / 'gen_rtl'
 bsc_out = Path.cwd() / '._bsc_'
 
-verilog_paths = [f'{BLUESPEC_PREFIX}/lib/Verilog']
-
 bsc_flags = [
     '-steps-max-intervals', '6000000',
     '-steps-warn-interval', '2000000',
@@ -150,10 +171,10 @@ if args.debug:
 else:
     bsc_flags += [
         '-promote-warnings', 'G0010:G0005:G0117',
-        '-warn-method-urgency',
-        '-warn-action-shadowing',
+        # '-warn-method-urgency',
+        # '-warn-action-shadowing',
         '-remove-dollar',
-        '-sat-yices',
+        # '-sat-yices',
         '-remove-unused-modules',
         '-remove-false-rules',
         '-remove-starved-rules',
@@ -167,6 +188,7 @@ else:
         '-no-show-timestamps', # regenerated files should be the same
         '-opt-undetermined-vals',
         '-unspecified-to', 'X',
+        '-reset-prefix', 'rst',
     ]
 
 
@@ -247,8 +269,11 @@ def bsc_generate_verilog():
         print(f"bsc failed with return code: {e.args[0]}")
         sys.exit(1)
 
+    flags = get_bsc_flags()
     used_mods = get_used_mods(vout_dir, top)
     print(f'used_mods={used_mods}')
+    verilog_paths = flags['vPath']
+    print(f'verilog_paths={verilog_paths}')
     verilog_sources = []
     used_mods = [top] + used_mods
     for use in used_mods:
@@ -257,6 +282,7 @@ def bsc_generate_verilog():
             verilog_sources.append(vout_dir / verilog_name)
         else:
             for vpath in verilog_paths:
+                print(f'searching vpath={vpath}')
                 for vfile in Path(vpath).glob(os.path.join('**', verilog_name)):
                     verilog_sources.append(vfile)
 
