@@ -23,32 +23,30 @@ typedef TDiv#(CipherRounds, UnrollFactor) PermCycles;
 // (* synthesize *)
 module mkGift(CryptoCoreIfc);
     Byte cipherPadByte = 8'h80;
-    let inLayer <- mkInputLayerNoExtraPad(cipherPadByte);
-    let outLayer <- mkOutputLayer;
-    let inState <- mkReg(Init);
-    let opState <- mkReg(OpIdle);
+    let inLayer                                <- mkInputLayerNoExtraPad(cipherPadByte);
+    let outLayer                               <- mkOutputLayer;
 
-    Reg#(Bool) isKey <- mkRegU;
-    Reg#(Bool) isCT <- mkRegU;
-    Reg#(Bool) isPTCT <- mkRegU; // PT or CT
-    Reg#(Bool) isNpub <- mkRegU;
-    Reg#(Bool) isAD <- mkRegU;
-    Reg#(Bool) isEoI <- mkRegU;
-    Reg#(Bool) isFirstADBlock <- mkRegU;
-    Reg#(Bool) isLastBlock <- mkRegU;
-    Reg#(Bool) nextGenTag <- mkRegU;
-    let set_isfirst <- mkPulseWire;
-    let unset_isfirst <- mkPulseWire;
-
-    Reg#(GiftState) giftState <- mkRegU;
-    Reg#(KeyState) keyState <- mkRegU;
-    Reg#(RoundConstant) roundConstant <- mkRegU;
-    let permutate <- mkReg(False);
-    Reg#(HalfBlock) delta <- mkRegU;
+    let inState                                <- mkReg(Init);
+    let opState                                <- mkReg(OpIdle);
+    Reg#(Bool) isKey                           <- mkRegU;
+    Reg#(Bool) isCT                            <- mkRegU;
+    Reg#(Bool) isPTCT                          <- mkRegU;
+    Reg#(Bool) isNpub                          <- mkRegU;
+    Reg#(Bool) isAD                            <- mkRegU;
+    Reg#(Bool) isEoI                           <- mkRegU;
+    Reg#(Bool) isFirstADBlock                  <- mkRegU;
+    Reg#(Bool) isLastBlock                     <- mkRegU;
+    Reg#(Bool) nextGenTag                      <- mkRegU;
+    Reg#(GiftState) giftState                  <- mkRegU;
+    Reg#(KeyState) keyState                    <- mkRegU;
+    Reg#(RoundConstant) roundConstant          <- mkRegU;
+    Reg#(HalfBlock) delta                      <- mkRegU;
     Reg#(Bit#(TLog#(PermCycles))) roundCounter <- mkRegU;
-    Reg#(Bool) emptyM <- mkRegU;
-    Reg#(Bool) emptyMsg <- mkRegU;
-    Reg#(Bool) lastAdEmptyM <- mkRegU;
+    Reg#(Bool) emptyM                          <- mkRegU;
+    Reg#(Bool) emptyMsg                        <- mkRegU;
+    Reg#(Bool) lastAdEmptyM                    <- mkRegU;
+    let set_isfirst                            <- mkPulseWire;
+    let unset_isfirst                          <- mkPulseWire;
 
   // ==================================================== Rules =====================================================
     (* fire_when_enabled, no_implicit_conditions *)
@@ -56,7 +54,6 @@ module mkGift(CryptoCoreIfc);
         match {.nextGS, .nextKS, .nextRC} = giftRound(giftState, keyState, roundConstant);
         giftState <= nextGS;
         roundConstant <= nextRC;
-        
         roundCounter <= roundCounter + 1;
         if (roundCounter == fromInteger(valueOf(PermCycles) - 1)) begin
             keyState <= restore_keystate(nextKS);
@@ -126,7 +123,6 @@ module mkGift(CryptoCoreIfc);
     endmethod
 
     method Action anticipate (HeaderFlags flags) if (inState == GetHeader);
-        // only AD, CT, PT, HM can be empty
         if (flags.empty) begin
             inLayer.put(unpack(zeroExtend(cipherPadByte)), True, False, 0, True);
             if (flags.ptct) inState <= Init;
@@ -147,15 +143,14 @@ module mkGift(CryptoCoreIfc);
         else if (flags.ad && flags.eoi)
             emptyM <= True; // don't unset if previously set
 
-        emptyMsg <= emptyM && flags.ptct;
+        emptyMsg     <= emptyM && flags.ptct;
         lastAdEmptyM <= flags.ad && flags.empty && (flags.eoi || emptyM);
-
     endmethod
     
     method Action bdi(i) if (inState == GetBdi);
         inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
-        isLastBlock <= i.last;
         if (i.last) inState <= isPTCT ? Init : GetHeader;
+        isLastBlock  <= i.last;
         lastAdEmptyM <= isAD && i.last && emptyM;
     endmethod
 

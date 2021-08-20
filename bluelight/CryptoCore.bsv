@@ -56,27 +56,22 @@ typedef struct {
 } BdIO deriving (Bits, Eq);
 
 typedef struct{
-    Bool npub;
-    Bool ad;
-    Bool pt;
-    Bool ct;
-    Bool ptct;
-    Bool hm;
-    Bool empty;
-    Bool eoi;
+    Bool npub;  // nonce public
+    Bool ad;    // associated data
+    Bool pt;    // plaintext
+    Bool ct;    // ciphertext
+    Bool ptct;  // PT or CT
+    Bool hm;    // hash message
+    Bool empty; // empty: The upcoming segment is empty. No subsequent bdi calls will occur for this type.
+    Bool eoi;   // end of input: The upcoming segment is the last input segment other than TAG.
 } HeaderFlags deriving(Bits, Eq, FShow);
 
 interface CryptoCoreIfc;
     // initialize CC for the operation [Optional]
     method Action init (Bool new_key, Bool decrypt, Bool hash);
 
-    // meta-data
-    // after fire, anticipate bdi words of this type, unless empty == True.
-    // npub:  The upcoming segment is the public nonce.
-    // ad:    The upcoming segment is Associated Data.
-    // hm:    The upcoming segment is Hash Message.
-    // empty: The upcoming segment is empty. No subsequent bdi calls will occur for this type.
-    // eoi:   The upcoming segment is the last input segment other than TAG.
+    // meta-data, header
+    // after fire, anticipate bdi words of this type, unless flags.empty == True.
     method Action anticipate (HeaderFlags flags);
 
     // Recieve a word of the key
