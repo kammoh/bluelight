@@ -21,7 +21,7 @@ typedef enum {
 
 typedef TDiv#(CipherRounds, UnrollFactor) PermCycles;
 
-function KeyState shuffle_key_state(KeyState nextKS);
+function KeyState restore_keystate(KeyState nextKS);
     KeyState swapped_ks = newVector;
     for (Integer i = 0; i < 8; i = i + 1)
         swapped_ks[i] = swapEndian(i % 2 == 0 ? rotateRight(nextKS[i], 4'b0) : nextKS[i]);
@@ -42,7 +42,7 @@ module mkGift(CryptoCoreIfc);
     Reg#(Bool) isNpub <- mkRegU;
     Reg#(Bool) isAD <- mkRegU;
     Reg#(Bool) isEoI <- mkRegU;
-    Reg#(Bool) isFirstBlock <- mkRegU;
+    Reg#(Bool) isFirstADBlock <- mkRegU;
     Reg#(Bool) isLastBlock <- mkRegU;
     Reg#(Bool) nextGenTag <- mkRegU;
     let set_isfirst <- mkPulseWire;
@@ -55,6 +55,8 @@ module mkGift(CryptoCoreIfc);
     Reg#(HalfBlock) delta <- mkRegU;
     Reg#(Bit#(TLog#(PermCycles))) roundCounter <- mkRegU;
     Reg#(Bool) emptyM <- mkRegU;
+    Reg#(Bool) emptyMsg <- mkRegU;
+    Reg#(Bool) lastAdEmptyM <- mkRegU;
 
   // ==================================================== Rules =====================================================
     (* fire_when_enabled, no_implicit_conditions *)
@@ -65,42 +67,35 @@ module mkGift(CryptoCoreIfc);
         
         roundCounter <= roundCounter + 1;
         if (roundCounter == fromInteger(valueOf(PermCycles) - 1)) begin
-            keyState <= shuffle_key_state(nextKS);
+            keyState <= restore_keystate(nextKS);
             opState <= nextGenTag ? OpGetTag : OpAbsorb;
         end else
             keyState <= nextKS;
     endrule
     
     (* fire_when_enabled, no_implicit_conditions *)
-    rule update_isfirst if(set_isfirst || unset_isfirst);
+    rule update_isfirst if (set_isfirst || unset_isfirst);
         if (set_isfirst)
-            isFirstBlock <= True;
+            isFirstADBlock <= True;
         else if (unset_isfirst)
-            isFirstBlock <= False;
+            isFirstADBlock <= False;
     endrule
     
     (* fire_when_enabled *)
     rule absorb_in if (opState == OpAbsorb);
         match {.inBlock, .valids} <- inLayer.get;
         let y = giftStateToBlock(giftState);
-        Bool lastAdEmptyM = isAD && isLastBlock && (emptyM || isEoI);
-        Bool emptyMsg = emptyM && isPTCT;
 
         match {.x, .c} = pho(y, inBlock, valids, isCT);
 
-        let offset = gen_offset(y, delta, isAD && isFirstBlock, last(valids) && !emptyMsg, isLastBlock);
-
-        if(isNpub)
-            emptyM <= isEoI; // set and unset, either new or reused key
-        else if(isAD && isEoI)
-            emptyM <= True; // don't unset if previously set
+        let offset = gen_offset(y, delta, isFirstADBlock, last(valids), isLastBlock);
 
         if (isNpub)
             giftState <= toGiftState(inBlock);
         else begin
-            if(lastAdEmptyM)
+            if (lastAdEmptyM)
                 giftState <= toGiftState(x);
-            else if(emptyMsg)
+            else if (emptyMsg)
                 giftState <= xor_topbar_block(giftStateToBlock(giftState), offset);
             else
                 giftState <= xor_topbar_block(x, offset);
@@ -147,7 +142,7 @@ module mkGift(CryptoCoreIfc);
         end else
             inState <= GetBdi;
 
-        set_isfirst.send();
+        if (ad) set_isfirst.send();
 
         isLastBlock  <= empty;
         isNpub       <= npub;
@@ -155,12 +150,22 @@ module mkGift(CryptoCoreIfc);
         isAD         <= ad;
         isPTCT       <= ptct;
         isEoI        <= eoi;
+
+        if (npub)
+            emptyM <= eoi; // set and unset, either new or reused key
+        else if (ad && eoi)
+            emptyM <= True; // don't unset if previously set
+
+        emptyMsg <= emptyM && ptct;
+        lastAdEmptyM <= ad && empty && (eoi || emptyM);
+
     endmethod
     
     method Action bdi(i) if (inState == GetBdi);
         inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
         isLastBlock <= i.last;
         if (i.last) inState <= isPTCT ? Init : GetHeader;
+        lastAdEmptyM <= isAD && i.last && emptyM;
     endmethod
 
     interface FifoOut bdo;
