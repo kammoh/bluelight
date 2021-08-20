@@ -22,6 +22,7 @@ sys.path.append(os.path.curdir)
 parser = argparse.ArgumentParser()
 parser.add_argument('design')
 parser.add_argument('--gen', action='store_true')
+parser.add_argument('--synthesis', action='store_true', help='Cleanup generated Verilog using vppreproc')
 parser.add_argument('--debug', action='store_true', default=False)
 parser.add_argument('--gtkwave', action='store_true')
 parser.add_argument('--seed', default='123',
@@ -148,7 +149,9 @@ if args.debug:
     ]
 else:
     bsc_flags += [
-        # '-promote-warnings', 'ALL',
+        '-promote-warnings', 'G0010:G0005:G0117',
+        '-warn-method-urgency',
+        '-warn-action-shadowing',
         '-remove-dollar',
         '-sat-yices',
         '-remove-unused-modules',
@@ -156,11 +159,17 @@ else:
         '-remove-starved-rules',
         '-no-keep-fires',
         '-no-keep-inlined-boundaries',
-        '-aggressive-conditions',  # saw suspicious behavior with this
+        '-show-range-conflict',
+        '-show-schedule',
+        '-sched-dot',
+        # '-aggressive-conditions',  # saw suspicious behavior with this
         '-O',
         '-no-show-timestamps', # regenerated files should be the same
         '-opt-undetermined-vals',
         '-unspecified-to', 'X',
+        '-vpp',
+        '-D', 'BSV_POSITIVE_RESET',
+        '-D', 'BSV_NO_INITIAL_BLOCKS,'
     ]
 
 
@@ -189,8 +198,8 @@ def bsc_generate_verilog():
     top_file = bluespec_sources[-1]
     top = rtl_settings['top']
     # if not args.debug: pretty messed up! do not use!
-    # if vout_dir.exists():
-    #     shutil.rmtree(vout_dir)
+    if vout_dir.exists():
+        shutil.rmtree(vout_dir)
     # if bsc_out.exists():
     #     shutil.rmtree(bsc_out)
     vout_dir.mkdir(exist_ok=True)
@@ -243,19 +252,44 @@ def bsc_generate_verilog():
 
     used_mods = get_used_mods(vout_dir, top)
     print(f'used_mods={used_mods}')
+    verilog_sources = []
+    used_mods = [top] + used_mods
     for use in used_mods:
         verilog_name = f'{use}.v'
-        if not (vout_dir / verilog_name).exists():
+        if (vout_dir / verilog_name).exists():
+            verilog_sources.append(vout_dir / verilog_name)
+        else:
             for vpath in verilog_paths:
                 for vfile in Path(vpath).glob(os.path.join('**', verilog_name)):
-                    shutil.copy(vfile, vout_dir)
+                    verilog_sources.append(vfile)
 
-    verilog_sources = list(vout_dir.glob('*.v'))
+    print(f"verilog_sources={verilog_sources}")
+    # verilog_sources = list(vout_dir.glob('*.v'))
 
-    for v in verilog_sources:
-        prepend_to_file(v, ['`define ' + vd for vd in verilog_defines])
+    # for v in verilog_sources:
+    #     prepend_to_file(v, ['`define ' + vd for vd in verilog_defines])
+    cmd = [ 'verilator', '-E', '-P', '--pp-comments']
+    cmd += [str(src) for src in verilog_sources]
+    cmd += [f'-D{vd}' for vd in verilog_defines]
+    cmd += [f'-I{vout_dir}']
 
-    print(f'verilog_sources={verilog_sources}')
+    out = subprocess.run(cmd, check=True, stdout=subprocess.PIPE).stdout
+    out_file = vout_dir / f'{top}.v'
+    with open(out_file, 'wb') as f:
+        f.write(out)
+
+    if args.synthesis:
+        # install Verlog::Perl:  cpan install Verilog::Language
+        cmd = ['vppreproc', '--noline', '--synthesis', str(out_file)]
+        try:
+            out = subprocess.run(cmd, check=True, stdout=subprocess.PIPE).stdout
+            out_file = vout_dir / f'{top}.v'
+            with open(out_file, 'wb') as f:
+                f.write(out)
+        except Exception as e:
+            print(f"vppreproc failed with return code: {e.args[0]}")
+
+    print(f'output: {out_file}')
 
     return top
 

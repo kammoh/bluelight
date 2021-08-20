@@ -1,24 +1,40 @@
 package Gift;
 
-import InputLayer :: *;
+import GiftRound   :: *;
+import InputLayer  :: *;
 import OutputLayer :: *;
-import GiftCipher :: *;
-import CryptoCore :: *;
+import GiftCipher  :: *;
+import CryptoCore  :: *;
 
 typedef enum {
     Init,
     GetHeader,
-    GetBdi,
-    Tag
-} State deriving(Bits, Eq);
+    GetBdi
+} InState deriving(Bits, Eq);
 
-(* synthesize *)
+typedef enum {
+    OpIdle,
+    OpAbsorb,
+    OpPermute,
+    OpGetTag
+} OpState deriving(Bits, Eq);
+
+typedef TDiv#(CipherRounds, UnrollFactor) PermCycles;
+
+function KeyState shuffle_key_state(KeyState nextKS);
+    KeyState swapped_ks = newVector;
+    for (Integer i = 0; i < 8; i = i + 1)
+        swapped_ks[i] = swapEndian(i % 2 == 0 ? rotateRight(nextKS[i], 4'b0) : nextKS[i]);
+    return swapped_ks;
+endfunction
+
+// (* synthesize *)
 module mkGift(CryptoCoreIfc);
     Byte cipherPadByte = 8'h80;
-    let cipher <- mkGiftCipher;
     let inLayer <- mkInputLayerNoExtraPad(cipherPadByte);
     let outLayer <- mkOutputLayer;
-    let state <- mkReg(Init);
+    let inState <- mkReg(Init);
+    let opState <- mkReg(OpIdle);
 
     Reg#(Bool) isKey <- mkRegU;
     Reg#(Bool) isCT <- mkRegU;
@@ -28,12 +44,34 @@ module mkGift(CryptoCoreIfc);
     Reg#(Bool) isEoI <- mkRegU;
     Reg#(Bool) isFirstBlock <- mkRegU;
     Reg#(Bool) isLastBlock <- mkRegU;
-    Reg#(Bool) haveKey <- mkReg(False);
+    Reg#(Bool) nextGenTag <- mkRegU;
     let set_isfirst <- mkPulseWire;
     let unset_isfirst <- mkPulseWire;
 
+    Reg#(GiftState) giftState <- mkRegU;
+    Reg#(KeyState) keyState <- mkRegU;
+    Reg#(RoundConstant) roundConstant <- mkRegU;
+    let permutate <- mkReg(False);
+    Reg#(HalfBlock) delta <- mkRegU;
+    Reg#(Bit#(TLog#(PermCycles))) roundCounter <- mkRegU;
+    Reg#(Bool) emptyM <- mkRegU;
+
   // ==================================================== Rules =====================================================
-    (* fire_when_enabled *)
+    (* fire_when_enabled, no_implicit_conditions *)
+    rule permutation if (opState == OpPermute);
+        match {.nextGS, .nextKS, .nextRC} = giftRound(giftState, keyState, roundConstant);
+        giftState <= nextGS;
+        roundConstant <= nextRC;
+        
+        roundCounter <= roundCounter + 1;
+        if (roundCounter == fromInteger(valueOf(PermCycles) - 1)) begin
+            keyState <= shuffle_key_state(nextKS);
+            opState <= nextGenTag ? OpGetTag : OpAbsorb;
+        end else
+            keyState <= nextKS;
+    endrule
+    
+    (* fire_when_enabled, no_implicit_conditions *)
     rule update_isfirst if(set_isfirst || unset_isfirst);
         if (set_isfirst)
             isFirstBlock <= True;
@@ -42,41 +80,72 @@ module mkGift(CryptoCoreIfc);
     endrule
     
     (* fire_when_enabled *)
-    rule encipher if (haveKey);
+    rule absorb_in if (opState == OpAbsorb);
         match {.inBlock, .valids} <- inLayer.get;
-        let outBlock <- cipher.blockUp(inBlock, valids, Flags {ct:isCT, ptct:isPTCT, ad:isAD, npub:isNpub, first:isFirstBlock, last:isLastBlock, eoi: isEoI});
-        if (isPTCT) outLayer.enq(outBlock, valids);
+        let y = giftStateToBlock(giftState);
+        Bool lastAdEmptyM = isAD && isLastBlock && (emptyM || isEoI);
+        Bool emptyMsg = emptyM && isPTCT;
+
+        match {.x, .c} = pho(y, inBlock, valids, isCT);
+
+        let offset = gen_offset(y, delta, isAD && isFirstBlock, last(valids) && !emptyMsg, isLastBlock);
+
+        if(isNpub)
+            emptyM <= isEoI; // set and unset, either new or reused key
+        else if(isAD && isEoI)
+            emptyM <= True; // don't unset if previously set
+
+        if (isNpub)
+            giftState <= toGiftState(inBlock);
+        else begin
+            if(lastAdEmptyM)
+                giftState <= toGiftState(x);
+            else if(emptyMsg)
+                giftState <= xor_topbar_block(giftStateToBlock(giftState), offset);
+            else
+                giftState <= xor_topbar_block(x, offset);
+            delta <= offset;
+        end
+        roundConstant <= fromInteger(1);
+        if (!lastAdEmptyM)
+            opState <= OpPermute;
+        nextGenTag <= isLastBlock && isPTCT;
+        
+        roundCounter <= 0;
+        if (isPTCT) outLayer.enq(c, valids);
         unset_isfirst.send();
     endrule
 
     (* fire_when_enabled *)
-    rule squeeze_tag_or_digest if (state == Tag);
-        let out <- cipher.blockDown;
+    rule squeeze_tag if (opState == OpGetTag);
+        let out = giftStateToBlock(giftState);
         outLayer.enq(out, replicate(True));
-        state <= Init;
+        opState <= OpIdle;
     endrule
 
 
-  // ================================================== Interfaces ==================================================
+  // ================================================== Interface ==================================================
 
-    method Action init(Bool new_key, Bool decrypt, Bool hash) if (state == Init);
-        state <= GetHeader;
-        if (new_key) haveKey <= False;
+    method Action init(Bool new_key, Bool decrypt, Bool hash) if (opState == OpIdle && inState == Init);
+        inState <= GetHeader;
+        if (!new_key) opState <= OpAbsorb;
     endmethod
 
-    method Action key(w, is_last) if (!haveKey && state != Init && state != Tag);
-        cipher.storeKey(w);
-        if (is_last) haveKey <= True;
+    method Action key(w, is_last) if (opState == OpIdle && inState != Init);
+        match {.hi, .lo} = split(w);
+        let ks0 = shiftInAtN(keyState,  swapEndian(lo));
+        keyState <= shiftInAtN(ks0,  swapEndian(hi));
+        if (is_last) opState <= OpAbsorb;
     endmethod
 
-    method Action anticipate (Bool npub, Bool ad, Bool pt, Bool ct, Bool empty, Bool eoi) if (state == GetHeader);
+    method Action anticipate (Bool npub, Bool ad, Bool pt, Bool ct, Bool empty, Bool eoi) if (inState == GetHeader);
         // only AD, CT, PT, HM can be empty
         let ptct = ct || pt;
         if (empty) begin
-            if (ptct) state <= Tag;
             inLayer.put(unpack(zeroExtend(cipherPadByte)), True, False, 0, True);
+            if (ptct) inState <= Init;
         end else
-            state <= GetBdi;
+            inState <= GetBdi;
 
         set_isfirst.send();
 
@@ -88,13 +157,11 @@ module mkGift(CryptoCoreIfc);
         isEoI        <= eoi;
     endmethod
     
-    method Action bdi(i) if (state == GetBdi);
+    method Action bdi(i) if (inState == GetBdi);
         inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
         isLastBlock <= i.last;
-        if (i.last)
-            state <= isPTCT ? Tag : GetHeader;
+        if (i.last) inState <= isPTCT ? Init : GetHeader;
     endmethod
-
 
     interface FifoOut bdo;
         method deq = outLayer.deq;

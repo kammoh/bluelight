@@ -1,7 +1,10 @@
 package GiftRound;
 
-import Vector :: *;
+import Vector         :: *;
 import BluelightUtils :: *;
+
+export Vector         :: *;
+export GiftRound      :: *;
 
 typedef 128 NumBlockBits;
 typedef TDiv#(NumBlockBits, SizeOf#(Byte)) GiftBlockBytes;
