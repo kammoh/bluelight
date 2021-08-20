@@ -162,7 +162,7 @@ else:
         '-show-range-conflict',
         '-show-schedule',
         '-sched-dot',
-        # '-aggressive-conditions',  # saw suspicious behavior with this
+        # '-aggressive-conditions',  # DO NOT USE!!! BUGGY!!
         '-O',
         '-no-show-timestamps', # regenerated files should be the same
         '-opt-undetermined-vals',
