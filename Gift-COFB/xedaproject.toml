@@ -1,0 +1,44 @@
+[[project]]
+name = "Gift"
+description = "Gift-COFB AEAD+HASH"
+author = "Kamyar Mohajerani"
+
+[[design]]
+name = 'GiftCipher'
+
+[design.rtl]
+sources = [
+    '../bluelight/BluelightUtils.bsv',
+    'GiftRound.bsv',
+    'GiftCipher.bsv',
+]
+top = 'mkGiftCipher'
+
+[design.tb]
+sources = ["cipherTb.py"]
+cocotb = { module = 'cipherTb' }
+
+[[design]]
+name = 'Gift'
+
+[design.rtl]
+sources = [
+    '../bluelight/BluelightUtils.bsv',
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
+    'GiftRound.bsv',
+    'GiftCipher.bsv',
+    'InputLayer.bsv',
+    'OutputLayer.bsv',
+    'Gift.bsv',
+    'GiftLwc.bsv',
+]
+top = 'lwc'
+
+
+[design.tb]
+sources = ["giftTb.py"]
+cocotb = { module = 'giftTb' }

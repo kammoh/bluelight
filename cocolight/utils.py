@@ -1,7 +1,7 @@
 import random
 
-def rand_bytes(n: int) -> bytes:
-    return bytes(random.getrandbits(8) for _ in range(n))
+def rand_bytes(num_bytes: int) -> bytes:
+    return bytes(random.getrandbits(8) for _ in range(num_bytes))
     
 def bytes_to_words(x: bytes, width, byteorder):
     assert width % 8 == 0

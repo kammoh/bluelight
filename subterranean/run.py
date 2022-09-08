@@ -123,25 +123,44 @@ bsc_flags = [
     '-steps-warn-interval', '2000000',
     '-promote-warnings', 'ALL',
     '-show-compiles', '-show-module-use',
-    '-show-version', '-show-range-conflict', '-show-module-use', '-show-method-conf',
+    '-show-version', '-show-range-conflict','-show-method-conf',
     '-bdir', str(bsc_out),
     '-info-dir', str(bsc_out),
 ]
 
-bsc_opt_flags = [
-    '-sat-yices',
-    '-remove-unused-modules',
-    '-aggressive-conditions',  # saw suspicious behavior with this
-    '-O',
-    '-opt-undetermined-vals',
-    '-unspecified-to', 'X',
-]
 
-if not args.debug:
-    bsc_flags += bsc_opt_flags
+if args.debug:
+    bsc_flags += [
+        # '-keep-fires',
+        # '-keep-inlined-boundaries',
+        # '-show-schedule',
+        # '-sched-dot',
+        '-sat-yices',
+        '-remove-unused-modules',
+        '-remove-false-rules',
+        '-remove-starved-rules',
+        '-no-keep-fires',
+        '-no-keep-inlined-boundaries',
+        '-aggressive-conditions',  # saw suspicious behavior with this
+        '-O',
+        '-no-show-timestamps', # regenerated files should be the same
+        '-opt-undetermined-vals',
+        '-unspecified-to', 'X',
+    ]
 else:
     bsc_flags += [
-        '-keep-fires', '-keep-inlined-boundaries', '-show-schedule', '-sched-dot'
+        '-remove-dollar',
+        '-sat-yices',
+        '-remove-unused-modules',
+        '-remove-false-rules',
+        '-remove-starved-rules',
+        '-no-keep-fires',
+        '-no-keep-inlined-boundaries',
+        '-aggressive-conditions',  # saw suspicious behavior with this
+        '-O',
+        '-no-show-timestamps', # regenerated files should be the same
+        '-opt-undetermined-vals',
+        '-unspecified-to', 'X',
     ]
 
 
@@ -172,6 +191,9 @@ def bsc_generate_verilog():
     if vout_dir.exists():
         shutil.rmtree(vout_dir)
     vout_dir.mkdir(exist_ok=False)
+    if not args.debug:
+        if bsc_out.exists():
+            shutil.rmtree(bsc_out)
     bsc_out.mkdir(exist_ok=True)
 
     for src in bluespec_sources:
@@ -187,6 +209,7 @@ def bsc_generate_verilog():
     bsc_defines = rtl_settings.get('parameters', {})
 
     if args.debug:
+        print("DEBUG!")
         bsc_defines['DEBUG']=1
 
 
@@ -258,7 +281,6 @@ def run_sim(top):
             '--trace-max-array', '64',
             '--trace-underscore',
             '--trace-max-width', '512',
-
         ]
     else:
         extra_args += [

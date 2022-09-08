@@ -5,6 +5,8 @@ import inspect
 from cffi import FFI
 import importlib
 
+from typeguard import typechecked
+
 # Proposed Python LWC API
 # inspired from https://csrc.nist.gov/CSRC/media/Projects/Lightweight-Cryptography/documents/final-lwc-submission-requirements-august2018.pdf
 
@@ -14,9 +16,11 @@ class LwcAead:
     CRYPTO_NPUBBYTES = None
     CRYPTO_ABYTES = None
 
+    @typechecked
     def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
         ...
 
+    @typechecked
     def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
         ...
 
@@ -24,6 +28,7 @@ class LwcAead:
 class LwcHash:
     CRYPTO_HASH_BYTES = None
 
+    @typechecked
     def hash(self, msg: bytes) -> bytes:
         ...
 

@@ -53,7 +53,7 @@ endfunction
 
 // ====================================================================================================================
 `ifdef DEBUG
-// (* synthesize *)
+(* synthesize *)
 `endif
 module mkSubterranean(CryptoCoreIfc);
     

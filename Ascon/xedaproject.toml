@@ -1,0 +1,46 @@
+[[project]]
+name = "Ascon"
+description = "Ascon AEAD+HASH"
+author = "Kamyar Mohajerani"
+
+[[design]]
+name = 'AsconCipher'
+
+[design.lwc]
+algorithm = ['']
+
+[design.rtl]
+sources = [
+    '../bluelight/BluelightUtils.bsv',
+    'AsconRound.bsv',
+    'AsconCipher.bsv',
+]
+top = 'mkAsconCipher'
+
+[design.tb]
+sources = ["cipherTb.py"]
+cocotb = { module = 'cipherTb' }
+
+[[design]]
+name = 'Ascon'
+
+[design.rtl]
+sources = [
+    '../bluelight/BluelightUtils.bsv',
+    '../bluelight/Bus/BusDefines.bsv',
+    '../bluelight/Bus/BusFIFO.bsv',
+    '../bluelight/Bus/Bus.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/LwcApi.bsv',
+    'AsconCipher.bsv',
+    'InputLayer.bsv',
+    'PISO.bsv',
+    'Ascon.bsv',
+    'AsconLwc.bsv',
+]
+top = 'lwc'
+
+
+[design.tb]
+sources = ["asconTb.py"]
+cocotb = { module = 'asconTb' }
