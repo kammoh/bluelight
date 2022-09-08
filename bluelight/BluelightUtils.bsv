@@ -3,6 +3,7 @@ package BluelightUtils;
 import Vector     :: *;
 import CryptoCore :: *;
 
+export Vector         :: *;
 export CryptoCore     :: *;
 export BluelightUtils :: *;
 
@@ -15,7 +16,7 @@ function w2__ rotateLeft(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#
     return unpack({tpl_2(s), tpl_1(s)});
 endfunction
 
-function w2__ rotateRight(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#(w2__,a__), Add#(n,m,a__));
+function w2__ rotate_right(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#(w2__,a__), Add#(n,m,a__));
     Tuple2#(Bit#(m),Bit#(n)) s = split(pack(w));
     return unpack({tpl_2(s), tpl_1(s)});
 endfunction
@@ -25,17 +26,12 @@ function w2__ swapEndian(w1__ word) provisos (Bits#(w1__, n), Bits#(w2__, n), Mu
     return unpack(pack(reverse(v)));
 endfunction
 
-/// Move
 
 typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) InLayerToCipher#(numeric type n_bytes);
 
 interface InputLayerIfc#(numeric type n_bytes);
     method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty);
     method ActionValue#(InLayerToCipher#(n_bytes)) get;
-    (* always_ready *)
-    method Bool extraPad;
-    method Bool canPut;
-    method Bool canGet;
 endinterface
 
 

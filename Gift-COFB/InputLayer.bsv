@@ -88,18 +88,6 @@ module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(GiftBlockByte
         do_deq.send();
         return tuple2(unpack(pack(block)), unpack(pack(valids)));
     endmethod
-
-    method Bool extraPad;
-        return needsPad;
-    endmethod
-
-    method Bool canPut;
-        return can_put;
-    endmethod
-
-    method Bool canGet;
-        return can_get;
-    endmethod
 endmodule
 
 endpackage
