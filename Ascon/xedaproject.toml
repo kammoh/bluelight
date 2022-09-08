@@ -7,7 +7,7 @@ author = "Kamyar Mohajerani"
 name = 'AsconCipher'
 
 [design.lwc]
-algorithm = ['']
+algorithm = ['ascon128v12']
 
 [design.rtl]
 sources = [
