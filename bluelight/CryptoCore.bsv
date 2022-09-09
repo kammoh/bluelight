@@ -15,30 +15,29 @@ typedef Bit#(`IO_WIDTH) CoreWord;
 typedef Bit#(8) Byte;
 typedef TDiv#(SizeOf#(CoreWord),SizeOf#(Byte)) CoreWordBytes;
 typedef Bit#(2) PadArg;
-typedef Bit#(TDiv#(SizeOf#(w__), SizeOf#(Byte))) ValidBytes#(type w__);
 
-// TODO FIXME as cryptoCore parameter or constant? `define?
+// TODO change to CryptoCore parameter, constant, or `define?
 // used in LwcApi
 Integer crypto_abytes = 16;     // size of tag in bytes
 Integer crypto_hash_bytes = 32; // size of hash digest in bytes
 typedef TDiv#(128,`IO_WIDTH) CryptoKeyWords; // size of key
 
-interface FifoOut#(type a);
+interface FifoOut#(type a__);
     method Action deq;
     (* always_ready *)
     method Bool notEmpty;
     (* always_ready *)
-    method a first;
+    method a__ first;
 endinterface
 
 function FifoOut#(a) fifofToFifoOut(FIFOF#(a) fifo);
-    return  interface FifoOut#(a);
-                method Action deq if (fifo.notEmpty);
-                    fifo.deq;
-                endmethod
-                method Bool notEmpty = fifo.notEmpty;
-                method a first = fifo.first;
-            endinterface;
+    return interface FifoOut#(a);
+            method Action deq if (fifo.notEmpty);
+                fifo.deq;
+            endmethod
+            method Bool notEmpty = fifo.notEmpty;
+            method a first = fifo.first;
+        endinterface;
 endfunction
 
 function w__ enableBits(Bool en, w__ b) provisos (Bits#(w__, n__), Literal#(w__), Add#(1, a__, n__)) = en ? b : 0;

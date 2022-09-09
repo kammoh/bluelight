@@ -24,7 +24,7 @@ int crypto_hash(unsigned char *out, const unsigned char *in,
   printstate("initialization:", s);
 
   // absorb plaintext
-  inlen = inlen;
+  // inlen = inlen;
   while (inlen >= RATE) {
     s.x0 ^= BYTES_TO_U64(in, 8);
     P12(&s);

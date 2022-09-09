@@ -15,12 +15,32 @@ function Bit#(4) padargToValids(Bool pad, PadArg padarg);
     endcase;
 endfunction
 
-module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul#(block_words, CoreWordBytes, n_bytes), Add#(a__, 4, n_bytes), Add#(c__, 32, TMul#(n_bytes, 8)));
+typedef struct {
+    Vector#(n_bytes, Byte) data;
+    Vector#(n_bytes, Bool) valid_bytes;
+    Bool last;
+    Bool key;
+    HeaderFlags flags;
+} SipoIo#(numeric type n_bytes);
+
+interface SipoIfc#(numeric type n_out_bytes);
+    method Action put(SipoIo#(CoreWordBytes) i);
+    method ActionValue#(SipoIo#(n_out_bytes)) get;
+    (* always_ready *)
+    method Bool canPut;
+    (* always_ready *)
+    method Bool canGet;
+endinterface
+
+module mkInputLayer#(Byte cipherPadByte) (SipoIfc#(n_out_bytes)) provisos (Mul#(block_words, CoreWordBytes, n_out_bytes), Add#(a__, 4, n_out_bytes), Add#(c__, 32, TMul#(n_out_bytes, 8)));
+    //==== Registers ====//
     Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
     Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
-    Reg#( Bit#(TLog#(TAdd#(block_words,1)))) counter <- mkReg(0);
+    Reg#(Bit#(TLog#(TAdd#(block_words, 1)))) counter <- mkReg(0);
     let closed <- mkReg(False);
     let needsPad <- mkReg(False); // only set with with closing word
+    
+    //===== Wires =====//
     Bool full = counter == fromInteger(valueOf(block_words));
     let do_deq <- mkPulseWireOR;
     let do_close <- mkPulseWireOR;
@@ -65,7 +85,8 @@ module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul
         needs_pad_unset.send();
     endrule
 
-    method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty) if (((!closed && !full) || do_deq) && !needsPad);
+    //======================================== Interface ========================================//
+    method Action put(i) if (((!closed && !full) || do_deq) && !needsPad);
         match {.padded, .paddedWord} = padWord(pack(word), padarg, cipherPadByte);
         enq_wire.wset(tuple2(pad ? unpack(paddedWord) : word, empty ? 0 : padargToValids(pad, padarg)));
         if (last) begin
@@ -74,13 +95,9 @@ module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_bytes)) provisos (Mul
         end
     endmethod
 
-    method ActionValue#(InLayerToCipher#(n_bytes)) get if ((closed && !needsPad) || full);
+    method ActionValue#(SipoIo#(n_out_bytes)) get if ((closed && !needsPad) || full);
         do_deq.send();
         return tuple2(unpack(pack(block)), unpack(pack(valids)));
-    endmethod
-
-    method Bool extraPad;
-        return needsPad;
     endmethod
 endmodule
 

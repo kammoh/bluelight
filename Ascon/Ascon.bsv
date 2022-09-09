@@ -6,10 +6,12 @@ import InputLayer :: *;
 import OutputLayer :: *;
 import CryptoCore :: *;
 import AsconCipher :: *;
+import LwcApi :: *;
 
 typedef enum {
     InIdle, // waiting on process command
-    InBusy  // recieve from bdi
+    GetKey, // waiting on process command
+    GetBdi  // receive from bdi
 } InputState deriving(Bits, Eq);
 
 module mkAscon(CryptoCoreIfc);
@@ -18,8 +20,7 @@ module mkAscon(CryptoCoreIfc);
     let inLayer <- mkInputLayer(padByte);
     let outLayer <- mkOutputLayer;
     let inState <- mkReg(InIdle);
-    let set_busy <- mkPulseWire;
-    let set_idle <- mkPulseWire;
+    // let change_state <- mkPulseWire;
 
     Reg#(Bool) isKey <- mkRegU;
     Reg#(Bool) isHM <- mkRegU;
@@ -32,22 +33,25 @@ module mkAscon(CryptoCoreIfc);
 
   // ==================================================== Rules =====================================================
 
-    (* fire_when_enabled *)
-    rule rl_change_state if (set_busy || set_idle);
-        if (set_busy)
-            inState <= InBusy;
-        else if (set_idle)
-            inState <= InIdle;
-    endrule
+    // (* fire_when_enabled *)
+    // rule rl_change_state if (change_state);
+    //     if (inState == )
+    //         inState <= GetBdi;
+    //     else if (inState == InIdle)
+    //         inState <= InIdle;
+    // endrule
     
     (* fire_when_enabled *)
-    rule rl_encipher if (inState == InBusy);
+    rule rl_encipher if (inState == GetBdi);
         match {.inBlock, .valids} <- inLayer.get;
         let last_block = last && !inLayer.extraPad;
 
         let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, npub:isNpub, ad:isAD, ptct:isPTCT, ct:isCT, hash:isHM, first:first, last:last_block});
-        if (isPTCT) outLayer.enq(outBlock, valids);
-        if (last_block) set_idle.send;
+        
+        if (isPTCT)
+            outLayer.enq(outBlock, valids);
+        if (last_block)
+            inState <= InIdle;
         first <= False;
     endrule
 
@@ -59,36 +63,46 @@ module mkAscon(CryptoCoreIfc);
 
   // ================================================== Interfaces ==================================================
 
-    method Action process(SegmentType typ, Bool empty, Bool eoi) if (inState == InIdle);
-        // only AD, CT, PT, HM can be empty
-        if (empty) inLayer.put(unpack(zeroExtend(padByte)), True, False, 0, True);
-        set_busy.send;
-        first  <= True;
-        last   <= empty;
-        isKey  <= typ == Key;
-        isNpub <= typ == Npub;
-        isHM   <= typ == HashMessage;
-        isCT   <= typ == Ciphertext;
-        isAD   <= typ == AD;
-        isPTCT <= typ == Ciphertext || typ == Plaintext;
+    method Action init(OpFlags op) if (inState == InIdle);
+        cipher.init(op);
+        if (op.new_key)
+            inState <= GetKey;
     endmethod
 
-    method Action init(OpCode op) if (inState == InIdle);
-        cipher.init(op);
+    // meta-data, header
+    // after fire, anticipate bdi words of this type, unless flags.empty == True.
+    method Action anticipate (HeaderFlags flags) if (inState == InIdle);
+        // only AD, CT, PT, HM can be empty
+        if (flags.empty) inLayer.put(unpack(zeroExtend(padByte)), True, False, 0, True);
+        inState <= GetBdi;
+        first  <= True;
+        last   <= flags.eoi;
+        isKey  <= False;
+        isNpub <= flags.npub;
+        isHM   <= flags.hm;
+        isCT   <= flags.ct;
+        isAD   <= flags.ad;
+        isPTCT <= flags.ptct;
     endmethod
-    
-    interface FifoIn bdi;
-        method Action enq(i) if (inState == InBusy);
-            match tagged BdIO {word: .word, lot: .lot, padarg: .padarg} = i;
-            inLayer.put(unpack(pack(word)), lot, lot && !isKey && !isNpub, padarg, False);
-            last <= lot;
-        endmethod
-    endinterface
+
+    // Receive a word of the key
+    method Action key (CoreWord w, Bool lst)  if (inState == GetKey);
+        inLayer.put(unpack(pack(w)), lst, False, 0, False);
+        last <= lst;
+        isKey <= True;
+        inState <= GetBdi;
+    endmethod
+
+    // Receive a word of Public Nonce, Associated Data, Plaintext, Ciphertext, or Hash Message
+    method Action bdi (BdIO i) if (inState == GetBdi);
+        inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
+        last <= i.last;
+    endmethod
 
     interface FifoOut bdo;
         method deq = outLayer.deq;
         method first;
-            return BdIO {word: outLayer.first, lot: outLayer.isLast, padarg: 0};
+            return BdIO {word: outLayer.first, last: outLayer.isLast, padarg: 0};
         endmethod
         method notEmpty = outLayer.notEmpty;
     endinterface

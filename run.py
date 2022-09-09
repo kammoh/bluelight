@@ -38,8 +38,8 @@ if not isinstance(designs, list):
     designs = [designs]
 print(f"available designs: {', '.join(n for d in designs if (n := d.get('name')))}")
 xeda_design = next(filter(lambda d: d["name"] == args.design, designs), None)
-if not xeda_design:
-    sys.exit("design not found.")
+if xeda_design is None:
+    sys.exit(f"no design named {args.design} designs: {[d.get('name') for d in designs]}")
 rtl_settings = xeda_design["rtl"]
 bluespec_sources = [
     f for f in rtl_settings["sources"] if f.endswith(".bsv") or f.endswith(".bs")
@@ -121,13 +121,13 @@ if args.gtkwave:
                     [x.split("//")[0].strip() for x in td_body.split("\n")]
                 )
                 td_name = td.group(2)
-                kvs = [re.split("\s*=\s*", x.strip()) for x in td_body.split(",")]
-                kvs = [
+                kvs_l1 = [re.split(r"\s*=\s*", x.strip()) for x in td_body.split(r"\s*,\s*")]
+                kvs_l = [
                     (x[0], x[1]) if len(x) == 2 else (x[0], i)
-                    for i, x in enumerate(kvs)
+                    for i, x in enumerate(kvs_l1)
                 ]
-                kvs = {k: val_to_int(v) for k, v in kvs}
-                values = [v[0] for v in kvs.values()]
+                kvs = {k: val_to_int(v) for k, v in kvs_l}
+                values: list[int] = [v[0] for v in kvs.values() if v[0] is not None]
                 sz = max(values)
                 if not sz:
                     print(len(kvs))
@@ -153,13 +153,14 @@ if args.gtkwave:
 BLUESPEC_PREFIX = os.environ.get("BLUESPEC_PREFIX")
 # bsc_exec = os.path.join(BLUESPEC_PREFIX, 'bin', 'bsc') if BLUESPEC_PREFIX else shutil.which("bsc")
 bsc_exec = shutil.which("bsc")
+assert bsc_exec, "bsc not found"
 
 if not BLUESPEC_PREFIX:
     BLUESPEC_PREFIX = os.path.dirname(os.path.dirname(bsc_exec))
 
 print(f"BLUESPEC_PREFIX={BLUESPEC_PREFIX} bsc={bsc_exec}")
 
-lib_paths = []
+lib_paths: list[str] = []
 
 lib_paths.insert(0, "+")
 
@@ -275,11 +276,21 @@ def bsc_generate_verilog():
     for param_name, param_value in bsc_defines.items():
         bsc_flags.extend(["-D", f"{param_name}={param_value}"])
 
-    cmd = [bsc_exec] + bsc_flags
+    cmd: list[str] = [bsc_exec] + bsc_flags
+
+    if lib_paths:
+        cmd += [
+            "-p",
+            ":".join(lib_paths),
+        ]
+    
+    if vout_dir:
+        cmd += [
+            "-vdir",
+            str(vout_dir),
+        ]
 
     cmd += [
-        "-p",
-        ":".join(lib_paths),
         # '-vsearch', ':'.join(verilog_paths),
         "-vdir",
         str(vout_dir),
@@ -357,13 +368,13 @@ def run_sim(top):
     extra_args = [
         # '+define+BSV_POSITIVE_RESET=1',
         # + [f'-I{p}' for p in verilog_paths],
-        "-Wno-STMTDLY",
-        "-Wno-INITIALDLY",
-        "--x-assign",
-        "unique",
-        "--x-initial",
-        "unique",  # perf: fast
-        "-O3",
+        # "-Wno-STMTDLY",
+        # "-Wno-INITIALDLY",
+        # "--x-assign",
+        # "unique",
+        # "--x-initial",
+        # "unique",  # perf: fast
+        # "-O3",
     ]
 
     if args.debug:

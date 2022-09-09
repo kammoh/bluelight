@@ -35,7 +35,7 @@ module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz
       tagged Valid .v:
         begin
           vec <= shiftInAtN(vec, v);
-          if (pwDeq) // simultanous enq & deq
+          if (pwDeq) // simultaneous enq & deq
             count_reg <= 1;
           else // enq only
             count_reg <= count_reg + 1;

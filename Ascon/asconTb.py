@@ -5,7 +5,10 @@ import sys
 import os
 import inspect
 import itertools
+import cocotb
+from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject
+from cocotb.triggers import RisingEdge, Timer
 from functools import partial
 from pprint import pprint
 
@@ -62,6 +65,20 @@ class RefCheckerTb(LwcRefCheckerTb):
 
 
 @cocotb.test()
+async def test0(dut: HierarchyObject):
+    dut._log.info("starting clock")
+    await cocotb.start(Clock(dut.clk, 10).start())
+    dut._log.info("clock started")
+    await Timer(5)
+    dut._log.info("after timer")
+    # Reset DUT
+    dut.rst.value = 1
+    for _ in range(3):
+        await RisingEdge(dut.clk)
+    dut.rst.value = 0
+    dut._log.info("reset done")
+
+@cocotb.test()
 async def debug_enc(dut: HierarchyObject):
     """Debug LWC Encryption"""
     debug = True
@@ -94,8 +111,8 @@ async def debug_enc(dut: HierarchyObject):
     await tb.launch_monitors()
     await tb.launch_drivers()
 
-    await tb.join_drivers(20000)
-    await tb.join_monitors(20000)
+    await tb.join_drivers(1000)
+    await tb.join_monitors(1000)
 
 
 @cocotb.test()

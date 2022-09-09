@@ -1,9 +1,9 @@
 package AsconCipher;
 
-import Vector :: *;
 import BluelightUtils :: *;
 import CryptoCore :: *;
 import AsconRound :: *;
+import LwcApi :: *;
 
 // function Action dump_state(String msg, AsconState s);
 //     action
@@ -30,7 +30,7 @@ function Vector#(n_words, AsconWord) bytesToWords(Vector#(n_bytes, Byte) bytes) 
 endfunction
 
 function AsconWord bytesToWord(Vector#(8, Byte) bytes);
-    return swapEndian(bytes);
+    return swapEndian(pack(bytes));
 endfunction
 
 function Vector#(n_bytes, Byte) wordsToBytes(Vector#(n_words, AsconWord) words) provisos(Mul#(n_words,8,n_bytes));
@@ -50,6 +50,17 @@ typedef struct{
 } Flags deriving(Bits, Eq, FShow);
 
 typedef 2 KeyWords;
+
+interface CipherIfc#(numeric type n_bytes, type flags_type);
+    // optional operation-specific initialization
+    method Action init(OpFlags op);
+
+    // method Action storeKey(CoreWord w);
+    // block in/out
+    method ActionValue#(BlockOfSize#(n_bytes)) blockUp(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
+    // block out
+    method ActionValue#(BlockOfSize#(8)) blockDown;
+endinterface
 
 module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds),Mul#(UnrollFactor, pb_cycles, PbRounds));
     Reg#(AsconState) asconState <- mkRegU;
@@ -94,8 +105,8 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
     endfunction
 
 
-    method Action init(OpCode op) if (state == Idle);
-        if(opCodeIsHash(op)) begin
+    method Action init(OpFlags op) if (state == Idle);
+        if(op.hash) begin
             asconState <= unpack(pack(zeroExtend(getIV(True))));
             roundConstant <= initRC(False);
             roundCounter <= 0;
@@ -155,7 +166,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         return xoredBlock;
     endmethod
 
-    method ActionValue#(Block) blockDown if (state == Squeeze);
+    method ActionValue#(BlockOfSize#(8)) blockDown if (state == Squeeze);
         squeezeCounter <= squeezeCounter + 1;
         if (squeezeCounter[0] == 1'b1 && (!squeezeHash || squeezeCounter[1] == 1'b1))
             state <= Idle;
@@ -163,10 +174,12 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
             state <= Permute;
 
         postPermuteState <= Squeeze;
-        roundCounter <= 0; // Pa for hash
-        roundConstant <= initRC(False); // Pa for hash
+        roundCounter <= 0;
+        roundConstant <= initRC(False); // P_a for hash
 
-        return swapEndian(squeezeHash ? asconState[0] : asconState[squeezeCounter[0] == 1'b1 ? 4 : 3] ^ keyStore[squeezeCounter[0]]);
+        return unpack(
+            swapEndian(squeezeHash ? asconState[0] : asconState[squeezeCounter[0] == 1'b1 ? 4 : 3] ^ keyStore[squeezeCounter[0]])
+        );
     endmethod
 endmodule
 
