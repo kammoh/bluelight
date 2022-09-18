@@ -3,6 +3,7 @@ package CryptoCore;
 import GetPut :: *;
 import FIFOF  :: *;
 import Vector :: *;
+import BluelightUtils :: *;
 
 export Vector     :: *;
 export CryptoCore :: *;

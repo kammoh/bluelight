@@ -5,8 +5,9 @@ import FIFOF        :: *;
 import SpecialFIFOs :: *;
 import GetPut       :: *;
 
-import Bus          :: *;
-import CryptoCore   :: *;
+import Bus            :: *;
+import CryptoCore     :: *;
+import BluelightUtils :: *;
 
 export CryptoCore :: *;
 export LwcApi     :: *;

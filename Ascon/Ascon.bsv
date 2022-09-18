@@ -63,7 +63,7 @@ module mkAscon(CryptoCoreIfc);
 
   // ================================================== Interfaces ==================================================
 
-    method Action init(OpFlags op) if (inState == InIdle);
+    method Action initOp(OpFlags op) if (inState == InIdle);
         cipher.init(op);
         if (op.new_key)
             inState <= GetKey;
@@ -94,8 +94,11 @@ module mkAscon(CryptoCoreIfc);
     endmethod
 
     // Receive a word of Public Nonce, Associated Data, Plaintext, Ciphertext, or Hash Message
-    method Action bdi (BdIO i) if (inState == GetBdi);
-        inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
+    // data:        data word
+    // valid_bytes: bit array indicating which bytes in `data` are valid
+    // last:        this is the last word of the type
+    method Action bdi (CoreWord data, ValidBytes#(CoreWord) valid_bytes, Bool last, HeaderFlags flags) if (inState == GetBdi);
+        inLayer.put(unpack(pack(data)), last, last && !flags.npub, i.padarg, False);
         last <= i.last;
     endmethod
 

@@ -1,14 +1,14 @@
 package BluelightUtils;
 
 import Vector     :: *;
-import CryptoCore :: *;
 
-export CryptoCore     :: *;
 export BluelightUtils :: *;
 
 typedef Bit#(8) Byte;
 typedef Vector#(n_bytes, Byte) BlockOfSize#(numeric type n_bytes);
 typedef Vector#(n_bytes, Bool) ByteValidsOfSize#(numeric type n_bytes);
+
+typedef Bit#(TDiv#(SizeOf#(w__), SizeOf#(Byte))) ValidBytes#(type w__);
 
 function w2__ rotateLeft(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#(w2__,a__), Add#(n,m,a__));
     Tuple2#(Bit#(n),Bit#(m)) s = split(pack(w));
