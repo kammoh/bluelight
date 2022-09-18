@@ -12,6 +12,8 @@ algorithm = ['ascon128v12']
 [design.rtl]
 sources = [
     '../bluelight/BluelightUtils.bsv',
+    '../bluelight/CryptoCore.bsv',
+    '../bluelight/Bus/Bus.bsv',
     'AsconRound.bsv',
     'AsconCipher.bsv',
 ]
