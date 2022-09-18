@@ -20,7 +20,7 @@ interface SIPO #(numeric type size, type el_type);
 endinterface
 
 // Pipelined SIPO (Serial In, Parallel Out)
-// if full enq can happen simultanously with deq of first element 
+// When full, enq and deq can happen simultaneously
 module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
   Reg#(CountType#(size)) count_reg <- mkReg(0);

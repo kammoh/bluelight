@@ -15,6 +15,7 @@ typedef Bit#(`IO_WIDTH) CoreWord;
 typedef Bit#(8) Byte;
 typedef TDiv#(SizeOf#(CoreWord),SizeOf#(Byte)) CoreWordBytes;
 typedef Bit#(2) PadArg;
+typedef Bit#(TDiv#(SizeOf#(w__), SizeOf#(Byte))) ValidBytes#(type w__);
 
 // TODO FIXME as cryptoCore parameter or constant? `define?
 // used in LwcApi
@@ -31,29 +32,43 @@ interface FifoOut#(type a);
 endinterface
 
 function FifoOut#(a) fifofToFifoOut(FIFOF#(a) fifo);
-    return interface FifoOut#(a);
-            method Action deq if (fifo.notEmpty);
-                fifo.deq;
-            endmethod
-            method Bool notEmpty = fifo.notEmpty;
-            method a first = fifo.first;
-        endinterface;
+    return  interface FifoOut#(a);
+                method Action deq if (fifo.notEmpty);
+                    fifo.deq;
+                endmethod
+                method Bool notEmpty = fifo.notEmpty;
+                method a first = fifo.first;
+            endinterface;
 endfunction
 
-function Tuple2#(Bool, CoreWord) padWord(CoreWord word, PadArg padarg, Byte padByte);
-    return case (padarg)
-        2'd0    : tuple2(False, word);
-        2'd1    : tuple2(True, {zeroExtend(padByte), word[7:0]});
-        2'd2    : tuple2(True, {zeroExtend(padByte), word[15:0]});
-        default : tuple2(True, {padByte, word[23:0]});
+function w__ enableBits(Bool en, w__ b) provisos (Bits#(w__, n__), Literal#(w__), Add#(1, a__, n__)) = en ? b : 0;
+
+function w__ padOutWord (w__ w, ValidBytes#(w__) valids) provisos (Bits#(w__, w_bits__), Mul#(w_bytes__, SizeOf#(Byte), w_bits__), Div#(w_bits__, SizeOf#(Byte), w_bytes__));
+    Vector#(w_bytes__, Byte) first_bytes = toChunks(w);
+    Vector#(w_bytes__, Bool) valid_bytes = map(unpack, toChunks(valids));
+    return unpack(pack(zipWith(enableBits, valid_bytes, first_bytes)));
+endfunction
+
+function CoreWord padInWord (CoreWord word, ValidBytes#(CoreWord) valids, Byte padByte) =
+    case (valids) matches
+        4'b1??? : word;
+        4'b?1?? : {padByte, word[23:0]};
+        4'b??1? : {zeroExtend(padByte), word[15:0]};
+        default : {zeroExtend(padByte), word[7:0]};
     endcase;
+
+function w__ padInWord80 (w__ w, ValidBytes#(w__) valids) provisos (Bits#(w__, w_bits__), Mul#(w_bytes__, SizeOf#(Byte), w_bits__), Div#(w_bits__, SizeOf#(Byte), w_bytes__), Add#(1, a__, w_bytes__));
+    function Byte f3(Bool en, Bool en_1, Byte b) = en ? b : {pack(en_1), 0};
+    Vector#(w_bytes__, Byte) first_bytes = toChunks(w);
+    Vector#(w_bytes__, Bool) valid_bytes = map(unpack, toChunks(valids));
+    let r = cons(head(first_bytes), zipWith3(f3, tail(valid_bytes), init(valid_bytes), tail(first_bytes)) );
+    return unpack(pack(r));
 endfunction
 
 typedef struct {
-    Bool last;      // last word of the type
-    PadArg padarg;  // padding argument, number of valid bytes or 0 all valid
-    CoreWord word;  // data word
-} BdIO deriving (Bits, Eq);
+    Bool last;  // last word of the type
+    w__  data;  // data word
+} WithLast#(type w__)  deriving (Bits, Eq, FShow);
 
 typedef struct{
     Bool npub;  // nonce public
@@ -62,8 +77,8 @@ typedef struct{
     Bool ct;    // ciphertext
     Bool ptct;  // PT or CT
     Bool hm;    // hash message
-    Bool empty; // empty: The upcoming segment is empty. No subsequent bdi calls will occur for this type.
-    Bool eoi;   // end of input: The upcoming segment is the last input segment other than TAG.
+    Bool empty; // empty
+    Bool eoi;   // end of input: The segment is the last input segment other than TAG.
 } HeaderFlags deriving(Bits, Eq, FShow);
 
 typedef struct {
@@ -74,20 +89,19 @@ typedef struct {
 
 interface CryptoCoreIfc;
     // initialize CC for the operation [Optional]
-    method Action init (OpFlags flags);
-
-    // meta-data, header
-    // after fire, anticipate bdi words of this type, unless flags.empty == True.
-    method Action anticipate (HeaderFlags flags);
+    method Action initOp (OpFlags flags);
 
     // Recieve a word of the key
     method Action key (CoreWord w, Bool last);
 
     // Recieve a word of Public Nonce, Associated Data, Plaintext, Ciphertext, or Hash Message
-    method Action bdi (BdIO i);
+    // data:        data word
+    // valid_bytes: bit array indicating which bytes in `data` are valid
+    // last:        this is the last word of the type
+    method Action bdi (CoreWord data, ValidBytes#(CoreWord) valid_bytes, Bool last, HeaderFlags flags);
 
     // output from CryptoCore: Send a word of Plaintext, Ciphertext, Tag, or Digest
-    interface FifoOut#(BdIO) bdo;
+    interface FifoOut#(WithLast#(CoreWord)) bdo;
 
 endinterface
 

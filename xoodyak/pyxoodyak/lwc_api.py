@@ -1,5 +1,5 @@
 import sys
-from typing import Tuple
+from typing import Optional, Tuple, Union
 import os
 import inspect
 from cffi import FFI
@@ -11,10 +11,10 @@ from typeguard import typechecked
 # inspired from https://csrc.nist.gov/CSRC/media/Projects/Lightweight-Cryptography/documents/final-lwc-submission-requirements-august2018.pdf
 
 class LwcAead:
-    CRYPTO_KEYBYTES = None
-    CRYPTO_NSECBYTES = None
-    CRYPTO_NPUBBYTES = None
-    CRYPTO_ABYTES = None
+    CRYPTO_KEYBYTES: Optional[int] = None
+    CRYPTO_NSECBYTES: Optional[int] = None
+    CRYPTO_NPUBBYTES: Optional[int] = None
+    CRYPTO_ABYTES: Optional[int] = None
 
     @typechecked
     def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
@@ -26,7 +26,7 @@ class LwcAead:
 
 
 class LwcHash:
-    CRYPTO_HASH_BYTES = None
+    CRYPTO_HASH_BYTES: Optional[int] = None
 
     @typechecked
     def hash(self, msg: bytes) -> bytes:
@@ -50,15 +50,15 @@ def mylog(*args, **kwargs):
 
 
 class LwcCffi():
-    aead_algorithm = None
-    hash_algorithm = None
-    root_cref_dir = None
+    aead_algorithm: Optional[str] = None
+    hash_algorithm: Optional[str] = None
+    root_cref_dir: Union[None, os.PathLike] = None
 
-    CRYPTO_KEYBYTES = None
-    CRYPTO_NSECBYTES = None
-    CRYPTO_NPUBBYTES = None
-    CRYPTO_ABYTES = None
-    CRYPTO_HASH_BYTES = None
+    CRYPTO_KEYBYTES: Optional[int] = None
+    CRYPTO_NSECBYTES: Optional[int] = None
+    CRYPTO_NPUBBYTES: Optional[int] = None
+    CRYPTO_ABYTES: Optional[int] = None
+    CRYPTO_HASH_BYTES: Optional[int] = None
 
     @staticmethod
     def build_cffi(root_cref_dir, algorithm, cffi_build_dir, DEBUG_LEVEL=0):

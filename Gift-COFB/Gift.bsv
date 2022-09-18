@@ -7,8 +7,8 @@ import GiftCipher  :: *;
 
 typedef enum {
     Init,
-    GetHeader,
-    GetBdi
+    GetBdi,
+    PadFullWord
 } InState deriving(Bits, Eq);
 
 typedef enum {
@@ -110,12 +110,12 @@ module mkGift(CryptoCoreIfc);
 
   // ================================================== Interface ==================================================
 
-    method Action init(OpFlags op) if (opState == OpIdle && inState == Init);
-        inState <= GetHeader;
+    method Action initOp (OpFlags op) if (opState == OpIdle && inState == Init);
+        inState <= GetBdi;
         if (!op.new_key) opState <= OpAbsorb;
     endmethod
 
-    method Action key(w, is_last) if (opState == OpIdle && inState != Init);
+    method Action key (w, is_last) if (opState == OpIdle && inState != Init);
         match {.hi, .lo} = split(w);
         let ks0 = shiftInAtN(keyState,  swapEndian(lo));
         keyState <= shiftInAtN(ks0,  swapEndian(hi));
@@ -149,7 +149,7 @@ module mkGift(CryptoCoreIfc);
     
     method Action bdi(i) if (inState == GetBdi);
         inLayer.put(unpack(pack(i.word)), i.last, i.last && !isNpub, i.padarg, False);
-        if (i.last) inState <= isPTCT ? Init : GetHeader;
+        if (i.last && isPTCT) inState <=  Init;
         isLastBlock  <= i.last;
         lastAdEmptyM <= isAD && i.last && emptyM;
     endmethod

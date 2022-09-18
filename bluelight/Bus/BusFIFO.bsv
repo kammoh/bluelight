@@ -1,18 +1,14 @@
-// Copyright (c) 2020 Bluespec, Inc. All rights reserved.
-//
-// SPDX-License-Identifier: BSD-3-Clause
-
 // Original version from https://github.com/B-Lang-org/bsc-contrib
-// Modified for use in BlueLight
+// Copyright (c) 2020 Bluespec, Inc. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+// Modified for use in BlueLight by Kamyar Mohajerani
 
 package BusFIFO;
 
-import BusDefines::*;
-// import Connectable::*;
-import FIFO::*;
-import FIFOF::*;
-import SpecialFIFOs::*;
-// import FShow::*;
+import BusDefines   :: *;
+import FIFO         :: *;
+import FIFOF        :: *;
+import SpecialFIFOs :: *;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
@@ -21,7 +17,7 @@ import SpecialFIFOs::*;
 
 module mkBusSenderWL#(a dflt) (BusSenderWL#(a)) provisos(Bits#(a, sa));
 
-   FIFOF#(DataLast#(a)) fifof <- mkDFIFOF(DataLast{last: False, data:dflt});
+   FIFOF#(WithLast#(a)) fifof <- mkDFIFOF(WithLast {last: False, data: dflt} );
    let data_wire = fifof.first;
 
    PulseWire deq_ready <- mkPulseWire;

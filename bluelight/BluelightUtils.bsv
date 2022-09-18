@@ -3,7 +3,6 @@ package BluelightUtils;
 import Vector     :: *;
 import CryptoCore :: *;
 
-export Vector         :: *;
 export CryptoCore     :: *;
 export BluelightUtils :: *;
 
@@ -16,7 +15,7 @@ function w2__ rotateLeft(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#
     return unpack({tpl_2(s), tpl_1(s)});
 endfunction
 
-function w2__ rotate_right(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#(w2__,a__), Add#(n,m,a__));
+function w2__ rotateRight(w1__ w, Bit#(n) dummy) provisos (Bits#(w1__,a__), Bits#(w2__,a__), Add#(n,m,a__));
     Tuple2#(Bit#(m),Bit#(n)) s = split(pack(w));
     return unpack({tpl_2(s), tpl_1(s)});
 endfunction
@@ -26,24 +25,10 @@ function w2__ swapEndian(w1__ word) provisos (Bits#(w1__, n), Bits#(w2__, n), Mu
     return unpack(pack(reverse(v)));
 endfunction
 
+function w__ _xor (w__ a, w__ b) provisos (Bitwise#(w__)) = a ^ b;
 
-typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) InLayerToCipher#(numeric type n_bytes);
+function Vector#(n, w__) xorVecs(Vector#(n, w__) v1, Vector#(n, w__) v2)
+    provisos (Bits#(w__, w_bits__), Bitwise#(w__), Add#(1, a__, n)) = zipWith(_xor, v1, v2);
 
-interface InputLayerIfc#(numeric type n_bytes);
-    method Action put(CoreWord word, Bool last, Bool pad, PadArg padarg, Bool empty);
-    method ActionValue#(InLayerToCipher#(n_bytes)) get;
-endinterface
-
-
-interface OutputLayerIfc#(numeric type n_bytes);
-    method Action enq(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids);
-    method Action deq;
-    (* always_ready *)
-    method Bool notEmpty;
-    (* always_ready *)
-    method CoreWord first;
-    (* always_ready *)
-    method Bool isLast;
-endinterface
 
 endpackage

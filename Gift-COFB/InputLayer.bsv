@@ -40,10 +40,9 @@ module mkInputLayerNoExtraPad#(Byte cipherPadByte) (InputLayerIfc#(GiftBlockByte
     (* fire_when_enabled *)
     rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
         case (enq_wire.wget) matches 
-            tagged Valid .enqued: begin
-                match {.w, .v} = enqued;
+            tagged Valid {.w, .v}: begin
                 if (counter == 0 || do_deq) begin
-                    block <= unpack(zeroExtend(pack(w)));
+                    block  <= unpack(zeroExtend(pack(w)));
                     valids <= unpack(zeroExtend(v));
                 end else begin
                     block[counter] <= w;

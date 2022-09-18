@@ -1,25 +1,18 @@
-// Copyright (c) 2020 Bluespec, Inc. All rights reserved.
-//
-// SPDX-License-Identifier: BSD-3-Clause
-
 // Original version from https://github.com/B-Lang-org/bsc-contrib
-// Modified for use in BlueLight
+// Copyright (c) 2020 Bluespec, Inc. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+// Modified for use in BlueLight by Kamyar Mohajerani
 
 package BusDefines;
 
-import Arbiter::*;
-import Connectable::*;
-import FIFO::*;
+import Arbiter     :: *;
+import Connectable :: *;
+import FIFO        :: *;
 
 typedef struct {
-  Bool last;
-  a    data;
-} DataLast#(type a) deriving (Bits, Eq, FShow);
-
-
-////////////////////////////////////////////////////////////////////////////////
-///
-////////////////////////////////////////////////////////////////////////////////
+    Bool last;  // last word of the type
+    w__  data;  // data word
+} WithLast#(type w__)  deriving (Bits, Eq, FShow);
 
 interface BusSender#(type a);
    interface FIFO#(a)    in;
@@ -27,7 +20,7 @@ interface BusSender#(type a);
 endinterface
 
 interface BusSenderWL#(type a);
-   interface FIFO#(DataLast#(a)) in;
+   interface FIFO#(WithLast#(a)) in;
    interface BusSendWL#(a)      out;
 endinterface
 

@@ -9,24 +9,23 @@ import sys
 from enum import Enum, auto
 from typing import Any, Optional, Tuple
 from pathlib import Path
-import os
-import inspect
 
 from .lwc_api import LwcAead, LwcHash, LwcCffi
 
-SCRIPT_DIR = os.path.realpath(os.path.dirname(
-    inspect.getfile(inspect.currentframe())))
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 
 class XoodyakCref(LwcCffi, LwcAead, LwcHash):
-    aead_algorithm = 'xoodyakv1'
-    hash_algorithm = 'xoodyakv1'
-    root_cref_dir = Path(SCRIPT_DIR).parent / 'cref'
+    aead_algorithm = "xoodyakv1"
+    hash_algorithm = "xoodyakv1"
+    root_cref_dir = SCRIPT_DIR.parent / "cref"
 
 
 Xoodyak_f_bPrime = 48
 Xoodyak_Rhash = 16
 Xoodyak_Rkin = 44
 Xoodyak_Rkout = 24
+
 
 class Plane:
     NCOLUMNS = 4
@@ -43,42 +42,48 @@ class Plane:
         self.lanes[i] = v
 
     def __str__(self):
-        return ' '.join(f"{x:08x}" for x in self.lanes)
+        return " ".join(f"{x:08x}" for x in self.lanes)
 
-    def __xor__(self, other: 'Plane') -> 'Plane':
+    def __xor__(self, other: "Plane") -> "Plane":
         return Plane([self.lanes[x] ^ other.lanes[x] for x in range(4)])
 
-    def __and__(self, other: 'Plane') -> 'Plane':
+    def __and__(self, other: "Plane") -> "Plane":
         return Plane([self.lanes[x] & other.lanes[x] for x in range(4)])
 
-    def __invert__(self) -> 'Plane':
+    def __invert__(self) -> "Plane":
         return Plane([~self.lanes[x] for x in range(self.NCOLUMNS)])
 
-    def cyclic_shift(self, dx, dz) -> 'Plane':
+    def cyclic_shift(self, dx, dz) -> "Plane":
         def cyclic_shift_lane(lane, dz):
             if dz == 0:
                 return lane
             return ((lane >> (32 - dz)) | (lane << dz)) % (1 << 32)
-        return Plane([cyclic_shift_lane(self.lanes[(i - dx) % self.NCOLUMNS], dz) for i in range(self.NCOLUMNS)])
+
+        return Plane(
+            [
+                cyclic_shift_lane(self.lanes[(i - dx) % self.NCOLUMNS], dz)
+                for i in range(self.NCOLUMNS)
+            ]
+        )
 
 
 class State:
     ENDIAN = sys.byteorder
     NROWS = 3
     LANE_BYTES = 4
-    
-    @staticmethod
+
     @property
-    def NLANES():
+    @staticmethod
+    def NLANES() -> int:
         return State.NROWS * Plane.NCOLUMNS
 
-    @staticmethod
     @property
-    def STATE_BYTES(self):
-        return State.LANE_BYTES * State.NLANES
+    @classmethod
+    def NBYTES(cls) -> int:
+        return cls.LANE_BYTES * cls.NLANES
 
     def __init__(self):
-        self.planes = [Plane() for _ in range(State.NROWS)]
+        self.planes = [Plane() for _ in range(self.NROWS)]
 
     def __getitem__(self, i):
         return self.planes[i]
@@ -87,7 +92,7 @@ class State:
         self.planes[i] = v
 
     def __str__(self):
-        return ' - '.join(str(x) for x in self.planes)
+        return " - ".join(str(x) for x in self.planes)
 
     def set_zero(self):
         for i in range(self.NROWS):
@@ -117,11 +122,9 @@ class State:
 
     def set_byte(self, byte, i):
         row, col, offset = State._linear_to_rco(i)
-        lane = bytearray(self.planes[row][col].to_bytes(
-            4, byteorder=State.ENDIAN))
+        lane = bytearray(self.planes[row][col].to_bytes(4, byteorder=State.ENDIAN))
         lane[offset] = byte
         self.planes[row][col] = int.from_bytes(lane, State.ENDIAN)
-
 
 
 class Xoodoo:
@@ -141,8 +144,7 @@ class Xoodoo:
                 p ^= 0b10110
             if (p & 0b01000) != 0:
                 p ^= 0b01011
-        self.rcs = [(rc_p[-j % 7] ^ 0b1000) << rc_s[-j % 6]
-                    for j in range(-11, 1)]
+        self.rcs = [(rc_p[-j % 7] ^ 0b1000) << rc_s[-j % 6] for j in range(-11, 1)]
 
     def initialize(self):
         self.state.set_zero()
@@ -171,7 +173,7 @@ class Xoodoo:
 
         # χ
         for y in range(3):
-            A[y] ^= (~A[(y+1) % 3] & A[(y + 2) % 3])
+            A[y] ^= ~A[(y + 1) % 3] & A[(y + 2) % 3]
 
         # ρ_east
         A[1] = A[1].cyclic_shift(0, 1)
@@ -185,11 +187,11 @@ class Xoodoo:
 
     def add_byte(self, byte, offset: int):
         row, col, byte_offset = State._linear_to_rco(offset)
-        self.state.planes[row][col] ^= (byte << (byte_offset * 8))
+        self.state.planes[row][col] ^= byte << (byte_offset * 8)
         # self.state.set_byte(byte ^ self.state.get_byte(offset), offset)
 
     def add_last_byte(self, byte):
-        self.state.planes[-1][-1] ^= (byte << 24)
+        self.state.planes[-1][-1] ^= byte << 24
 
     def add_bytes(self, data: bytes, offset: int = 0):
         data_offset = 0
@@ -202,7 +204,8 @@ class Xoodoo:
         for i in range(data_offset, len(data), State.LANE_BYTES):
             row, col = State._row_cols(i)
             self.state[row][col] ^= int.from_bytes(
-                data[i:i+State.LANE_BYTES], State.ENDIAN)
+                data[i : i + State.LANE_BYTES], State.ENDIAN
+            )
             data_offset += State.LANE_BYTES
 
         for i, d in enumerate(data[data_offset:]):
@@ -214,13 +217,13 @@ class Xoodoo:
 
     def extract_and_addbytes(self, input: bytes, offset: int = 0) -> bytes:
         ilen = len(input)
-        assert offset < State.STATE_BYTES
-        assert offset + ilen < State.STATE_BYTES
+        assert offset < State.NBYTES
+        assert offset + ilen < State.NBYTES
         return bytes(self[offset + i] ^ input[i] for i in range(ilen))
 
     def extract_bytes(self, offset: int, length: int) -> bytes:
-        assert offset < State.STATE_BYTES
-        assert offset + length < State.STATE_BYTES
+        assert offset < State.NBYTES
+        assert offset + length < State.NBYTES
         return bytes(self.state.get_byte(i + offset) for i in range(length))
 
 
@@ -238,7 +241,7 @@ class Cyclist:
     def __init__(self, debug=False) -> None:
         self.xoodoo = Xoodoo()
         self.initialize()
-        self.debug=debug
+        self.debug = debug
         if self.debug:
             print("Cyclist is in Debug mode!")
 
@@ -257,7 +260,7 @@ class Cyclist:
             self._absorb_key(key)
 
     def dump_state(self, msg):
-        self.log(f'{msg:16.16} {self.xoodoo.state}')
+        self.log(f"{msg:16.16} {self.xoodoo.state}")
 
     def up(self, out_len: int, cu: int) -> Optional[bytes]:
         if self.mode != Cyclist.Mode.Hash:
@@ -268,8 +271,8 @@ class Cyclist:
             return None
         return self.xoodoo.extract_bytes(0, out_len)
 
-    def down(self, x: bytes = b'', cd: int = 0) -> None:
-        self.xoodoo.add_bytes(x + b'\x01')
+    def down(self, x: bytes = b"", cd: int = 0) -> None:
+        self.xoodoo.add_bytes(x + b"\x01")
         if self.mode == Cyclist.Mode.Hash:
             cd &= 0x01
         self.xoodoo.add_byte(cd, Xoodyak_f_bPrime - 1)
@@ -284,12 +287,11 @@ class Cyclist:
 
         while True:
             split_len = min(io_len, Xoodyak_Rkout)
-            p = input[io_offset: io_offset + split_len]
+            p = input[io_offset : io_offset + split_len]
             self.up(0, cu)
-            out[io_offset: io_offset +
-                split_len] = self.xoodoo.extract_and_addbytes(p)
+            out[io_offset : io_offset + split_len] = self.xoodoo.extract_and_addbytes(p)
             if decrypt:
-                p = out[io_offset: io_offset + split_len]
+                p = out[io_offset : io_offset + split_len]
             self.down(p, 0)
             cu = 0
             io_offset += split_len
@@ -307,7 +309,7 @@ class Cyclist:
             if self.phase != Cyclist.Phase.Up:
                 self.up(0, 0)
             split_len = min(xlen, r)
-            self.down(x[xoff:xoff+split_len], cd)
+            self.down(x[xoff : xoff + split_len], cd)
             cd = 0
             xoff += split_len
             xlen -= split_len
@@ -317,7 +319,7 @@ class Cyclist:
     def absorb(self, x: bytes) -> None:
         self._absorb_any(x, 0x03)
 
-    def _absorb_key(self, key: bytes, id: bytes = b'', counter: bytes = None) -> None:
+    def _absorb_key(self, key: bytes, id: bytes = b"", counter: bytes = None) -> None:
         assert self.mode == Cyclist.Mode.Hash
         self.mode = Cyclist.Mode.Keyed
         self.r_absorb = Xoodyak_Rkin
@@ -333,7 +335,7 @@ class Cyclist:
             if out_offset > 0:
                 self.down()
             seg_len = min(olen, self.r_squeeze)
-            out[out_offset:out_offset + seg_len] = self.up(seg_len, cu)
+            out[out_offset : out_offset + seg_len] = self.up(seg_len, cu)
             cu = 0
             out_offset += seg_len
             olen -= seg_len
@@ -347,40 +349,43 @@ class Cyclist:
 
 
 class XoodyakOrig(LwcAead, LwcHash):
-    """ Based on C implementation """
+    """Based on C implementation"""
+
     CRYPTO_KEYBYTES = Cyclist.CRYPTO_KEYBYTES
     CRYPTO_NPUBBYTES = 16
     CRYPTO_HASH_BYTES = 32
-    CRYPTO_ABYTES = 16 # Tag
+    CRYPTO_ABYTES = 16  # Tag
 
     def __init__(self, debug=False) -> None:
         print(f"PyXoodyak: debug={debug}")
         self.cyclist = Cyclist(debug=debug)
         self.debug = debug
         if self.debug:
-            print(f'Xoodyak is in Debug ({self.debug}) mode!')
+            print(f"Xoodyak is in Debug ({self.debug}) mode!")
 
     def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> bytes:
         self.cyclist.initialize(key)
-        self.cyclist.dump_state(f'Aft. absorb key')
+        self.cyclist.dump_state(f"Aft. absorb key")
         self.cyclist.absorb(nonce)
-        self.cyclist.dump_state(f'Aft. absorb nonce')
+        self.cyclist.dump_state(f"Aft. absorb nonce")
         self.cyclist.absorb(ad)
-        self.cyclist.dump_state(f'Aft. absorb ad')
+        self.cyclist.dump_state(f"Aft. absorb ad")
         ct = self.cyclist.crypt(pt, decrypt=False)
-        self.cyclist.dump_state(f'Aft. crypt ad')
+        self.cyclist.dump_state(f"Aft. crypt ad")
         tag = self.cyclist.squeeze(self.CRYPTO_ABYTES)
         return tag, ct
 
-    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bool, Optional[bytes]]:
+    def decrypt(
+        self, ct: bytes, ad: bytes, nonce: bytes, key: bytes
+    ) -> Tuple[bool, Optional[bytes]]:
         if len(ct) < self.CRYPTO_ABYTES:
             return False, None
         self.cyclist.initialize(key)
         self.cyclist.absorb(nonce)
         self.cyclist.absorb(ad)
-        pt = self.cyclist.crypt(ct[:-self.CRYPTO_ABYTES], decrypt=True)
+        pt = self.cyclist.crypt(ct[: -self.CRYPTO_ABYTES], decrypt=True)
         tag = self.cyclist.squeeze(self.CRYPTO_ABYTES)
-        if ct[-self.CRYPTO_ABYTES:] != tag:
+        if ct[-self.CRYPTO_ABYTES :] != tag:
             return False, bytes(len(ct) - self.CRYPTO_ABYTES)
         return True, pt
 
@@ -389,100 +394,114 @@ class XoodyakOrig(LwcAead, LwcHash):
         self.cyclist.absorb(msg)
         return self.cyclist.squeeze(self.CRYPTO_HASH_BYTES)
 
+
 class Xoodyak(LwcAead, LwcHash):
     """Xoodyak interface for AEAD and Hash"""
-    aead_algorithm = 'xoodyakv1'
-    hash_algorithm = 'xoodyakv1'
+
+    aead_algorithm = "xoodyakv1"
+    hash_algorithm = "xoodyakv1"
 
     CRYPTO_KEYBYTES = Cyclist.CRYPTO_KEYBYTES
     CRYPTO_NPUBBYTES = 16
     CRYPTO_HASH_BYTES = 32
-    CRYPTO_ABYTES = 16 # Tag
-
+    CRYPTO_ABYTES = 16  # Tag
 
     def __init__(self, debug=False) -> None:
         print(f"PyXoodyak: debug={debug}")
         self.cyclist = Cyclist(debug=debug)
         self.debug = debug
         if self.debug:
-            print(f'Xoodyak is in Debug ({self.debug}) mode!')
+            print(f"Xoodyak is in Debug ({self.debug}) mode!")
 
     def log(self, *args, **kwargs):
         if self.debug:
             print(*args, **kwargs)
 
-    def _crypt(self, in_bytes: bytes, ad: bytes, nonce: bytes, key: bytes, tag=None) -> Tuple[Any, bytes]:
+    def _crypt(
+        self, in_bytes: bytes, ad: bytes, nonce: bytes, key: bytes, tag=None
+    ) -> Tuple[Any, bytes]:
         decrypt = tag is not None
         self.cyclist.xoodoo.initialize()
-        self.cyclist.xoodoo.add_bytes(key + bytes([0]) + b'\x01')
+        self.cyclist.xoodoo.add_bytes(key + bytes([0]) + b"\x01")
         self.cyclist.xoodoo.add_last_byte(0x02)
         # self.cyclist.dump_state('before key perm')
         self.cyclist.xoodoo.permute()
         # self.cyclist.dump_state('after key perm')
-        self.cyclist.xoodoo.add_bytes(nonce + b'\x01')
+        self.cyclist.xoodoo.add_bytes(nonce + b"\x01")
         self.cyclist.xoodoo.add_last_byte(0x03)
         # self.cyclist.dump_state('before nonce perm')
         self.cyclist.xoodoo.permute()
-        self.cyclist.dump_state('after nonce perm')
+        self.cyclist.dump_state("after nonce perm")
         xlen = len(ad)
         xoff = 0
         first = True
         while True:
             split_len = min(xlen, Xoodyak_Rkin)
-            self.cyclist.xoodoo.add_bytes(ad[xoff:xoff+split_len] + b'\x01')
+            self.cyclist.xoodoo.add_bytes(ad[xoff : xoff + split_len] + b"\x01")
             xoff += split_len
             xlen -= split_len
             if xlen == 0:
                 self.cyclist.xoodoo.add_last_byte(0x83 if first else 0x80)
-                self.cyclist.dump_state('before ad perm (last)')
+                self.cyclist.dump_state("before ad perm (last)")
                 self.cyclist.xoodoo.permute()
-                self.cyclist.dump_state('after ad perm (last)')
+                self.cyclist.dump_state("after ad perm (last)")
                 break
             else:
                 self.cyclist.xoodoo.add_last_byte(0x03 if first else 0)
-                self.cyclist.dump_state('before ad perm')
+                self.cyclist.dump_state("before ad perm")
                 self.cyclist.xoodoo.permute()
-                self.cyclist.dump_state('after ad perm')
+                self.cyclist.dump_state("after ad perm")
                 first = False
         io_len = len(in_bytes)
-        out_bytes = bytearray(io_len) # mutable version of bytes
+        out_bytes = bytearray(io_len)  # mutable version of bytes
         io_offset = 0
         while True:
-            self.cyclist.dump_state('b4 add PT')
+            self.cyclist.dump_state("b4 add PT")
             split_len = min(io_len, Xoodyak_Rkout)
-            self.log(f'adding: {(in_bytes[io_offset:io_offset+split_len]).hex()}')
-            out_bytes[io_offset: io_offset + split_len] = bytes(
-                self.cyclist.xoodoo[i] ^ in_bytes[io_offset + i] for i in range(split_len))
-            self.log(f'out_bytes={out_bytes.hex()}')
-            x = out_bytes[io_offset: io_offset +
-                          split_len] if decrypt else in_bytes[io_offset: io_offset + split_len]
-            self.cyclist.xoodoo.add_bytes(x + b'\x01')
+            self.log(f"adding: {(in_bytes[io_offset:io_offset+split_len]).hex()}")
+            out_bytes[io_offset : io_offset + split_len] = bytes(
+                self.cyclist.xoodoo[i] ^ in_bytes[io_offset + i]
+                for i in range(split_len)
+            )
+            self.log(f"out_bytes={out_bytes.hex()}")
+            x = (
+                out_bytes[io_offset : io_offset + split_len]
+                if decrypt
+                else in_bytes[io_offset : io_offset + split_len]
+            )
+            self.cyclist.xoodoo.add_bytes(x + b"\x01")
             io_offset += split_len
             io_len -= split_len
             if io_len == 0:
                 self.cyclist.xoodoo.add_last_byte(0x40)
-                self.cyclist.dump_state('b4 PT Perm.last')
+                self.cyclist.dump_state("b4 PT Perm.last")
                 self.cyclist.xoodoo.permute()
-                self.cyclist.dump_state('af PT Perm.last')
+                self.cyclist.dump_state("af PT Perm.last")
                 break
             else:
-                self.cyclist.dump_state('b4 PT perm')
+                self.cyclist.dump_state("b4 PT perm")
                 self.cyclist.xoodoo.permute()
-                self.cyclist.dump_state('af PT perm')
+                self.cyclist.dump_state("af PT perm")
         computed_tag = bytes(self.cyclist.xoodoo[i] for i in range(self.CRYPTO_ABYTES))
-        out_bytes = bytes(out_bytes) # to immutable bytes TODO better (and still safe) way?
+        out_bytes = bytes(
+            out_bytes
+        )  # to immutable bytes TODO better (and still safe) way?
         if decrypt:
             tag_verified = computed_tag == tag
             pt = out_bytes if tag_verified else bytes(len(in_bytes))
-            self.log(f'[Py] Tag Matched:{tag_verified} Plaintext: {pt.hex()}')
+            self.log(f"[Py] Tag Matched:{tag_verified} Plaintext: {pt.hex()}")
             return tag_verified, pt
-        self.log(f'[Py] Tag: {computed_tag.hex()}\n     CT: {out_bytes.hex()}')
+        self.log(f"[Py] Tag: {computed_tag.hex()}\n     CT: {out_bytes.hex()}")
         return computed_tag, out_bytes
-    
-    def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
+
+    def encrypt(
+        self, pt: bytes, ad: bytes, nonce: bytes, key: bytes
+    ) -> Tuple[bytes, bytes]:
         return self._crypt(pt, ad, nonce, key)
 
-    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
+    def decrypt(
+        self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes
+    ) -> Tuple[bool, bytes]:
         return self._crypt(ct, ad, nonce, key, tag)
 
     def hash(self, msg: bytes) -> bytes:
@@ -493,26 +512,24 @@ class Xoodyak(LwcAead, LwcHash):
         first = True
         while True:
             split_len = min(xlen, Xoodyak_Rhash)
-            self.cyclist.xoodoo.add_bytes(msg[xoff:xoff+split_len] + b'\x01')
+            self.cyclist.xoodoo.add_bytes(msg[xoff : xoff + split_len] + b"\x01")
             self.cyclist.xoodoo.add_last_byte(0x01 if first else 0)
             first = False
-            self.cyclist.dump_state('-bP_x')
+            self.cyclist.dump_state("-bP_x")
             self.cyclist.xoodoo.permute()
-            self.cyclist.dump_state('+aP_x')
+            self.cyclist.dump_state("+aP_x")
             xoff += split_len
             xlen -= split_len
             if xlen == 0:
                 break
         # squeeze hash
-        h0 = bytes(self.cyclist.xoodoo.state.get_byte(i)
-                   for i in range(Xoodyak_Rhash))
-        self.log(f'[Py] h0={h0.hex()}')
+        h0 = bytes(self.cyclist.xoodoo.state.get_byte(i) for i in range(Xoodyak_Rhash))
+        self.log(f"[Py] h0={h0.hex()}")
         self.cyclist.xoodoo.add_byte(0x01, 0)
 
-        self.cyclist.dump_state('-bP_Last')
+        self.cyclist.dump_state("-bP_Last")
         self.cyclist.xoodoo.permute()
-        self.cyclist.dump_state('+aP_Last')
-        h1 = bytes(self.cyclist.xoodoo.state.get_byte(i)
-                   for i in range(Xoodyak_Rhash))
-        self.log(f'[Py] h1={h1.hex()}')
+        self.cyclist.dump_state("+aP_Last")
+        h1 = bytes(self.cyclist.xoodoo.state.get_byte(i) for i in range(Xoodyak_Rhash))
+        self.log(f"[Py] h1={h1.hex()}")
         return h0 + h1
