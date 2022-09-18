@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
+import argparse
 import inspect
-from math import ceil, log2
-from cocotb_test.simulator import Verilator
-
-from pathlib import Path
-import subprocess
-from subprocess import PIPE
-import sys
 import os
 import re
 import shutil
-import argparse
+import subprocess
+import sys
+from math import ceil, log2
+from pathlib import Path
+from subprocess import PIPE
 
 import toml
+from cocotb_test.simulator import Verilator
 
 SCRIPT_DIR = os.path.realpath(os.path.dirname(inspect.getfile(inspect.currentframe())))
 
