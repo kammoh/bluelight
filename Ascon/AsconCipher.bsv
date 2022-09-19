@@ -16,6 +16,8 @@ import LwcApi :: *;
 
 typedef enum {
     Idle,
+    LoadKey,
+    Absorb,
     Permute,
     Squeeze
 } State deriving (Bits, Eq, FShow);
@@ -39,7 +41,6 @@ function Vector#(n_bytes, Byte) wordsToBytes(Vector#(n_words, AsconWord) words) 
 endfunction
 
 typedef struct{
-    Bool key;
     Bool npub;
     Bool ad;
     Bool ptct;
@@ -54,12 +55,14 @@ typedef 2 KeyWords;
 interface CipherIfc#(numeric type n_bytes, type flags_type);
     // optional operation-specific initialization
     method Action init(OpFlags op);
+    
+    method Action key(BlockOfSize#(n_bytes) block);
 
     // method Action storeKey(CoreWord w);
     // block in/out
-    method ActionValue#(BlockOfSize#(n_bytes)) blockUp(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
+    method ActionValue#(BlockOfSize#(n_bytes)) absorb(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
     // block out
-    method ActionValue#(BlockOfSize#(8)) blockDown;
+    method ActionValue#(BlockOfSize#(8)) squeeze;
 endinterface
 
 module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds),Mul#(UnrollFactor, pb_cycles, PbRounds));
@@ -69,11 +72,12 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
     Reg#(Vector#(KeyWords,AsconWord)) keyStore <- mkRegU;
     Reg#(Bit#(TLog#(pa_cycles))) roundCounter <- mkRegU;
     Reg#(RoundConstant) roundConstant <- mkRegU;
-    Reg#(Bit#(2)) squeezeCounter <- mkRegU; // 2 if supports hash, o/w 1
+    Reg#(Bit#(2)) squeezeCounter <- mkRegU; // 2 bits if supports hash, o/w 1 bit
+    Reg#(Bit#(1)) loadKeyCounter <- mkRegU; // which part of key is loading
+    Reg#(Bit#(1)) loadNonceCounter <- mkRegU;
     Reg#(Bool) squeezeHash <- mkRegU;
 
     let rateWords = valueOf(RateWords);
-    let secondPartKN <- mkReg(False);
 
     (* fire_when_enabled, no_implicit_conditions *)
     rule rl_permutation if (state == Permute);
@@ -92,7 +96,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         return {pack(!hash), 7'b0, r, a, b, 23'b0, pack(hash), 8'b0};
     endfunction
 
-    function AsconState initState(Block npubBlock, Vector#(2, AsconWord) ks);
+    function AsconState keyNonceInit(Block npubBlock, Vector#(2, AsconWord) ks);
         // Npub_0: previously copied if rateWords == 1
         AsconState s = asconState;
         s[0] = getIV(False);
@@ -104,18 +108,28 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         return s;
     endfunction
 
-
+    // Must be called before any operation
     method Action init(OpFlags op) if (state == Idle);
         if(op.hash) begin
             asconState <= unpack(pack(zeroExtend(getIV(True))));
             roundConstant <= initRC(False);
-            roundCounter <= 0;
-            state <= Permute;
-            postPermuteState <= Idle;
         end
+        state <= op.hash ? Permute : op.new_key ? LoadKey : LoadKey;
+        postPermuteState <= Absorb;
+        roundCounter <= 0;
+        loadKeyCounter <= 0;
+        loadNonceCounter <= 0;
+        squeezeCounter <= 0;
     endmethod
 
-    method ActionValue#(Block) blockUp(Block block, ByteValids valids, Flags flags) if (state == Idle);
+    method Action key(Block block) if (state == LoadKey);
+        keyStore <= shiftInAtN(keyStore, bytesToWord(block));
+        loadKeyCounter <= loadKeyCounter + 1;
+        if (loadKeyCounter == 1)
+            state <= Absorb;
+    endmethod
+
+    method ActionValue#(Block) absorb(Block block, ByteValids valids, Flags flags) if (state == Absorb);
         Block rateBlock = wordsToBytes(take(asconState));
         Block xoredBlock = unpack(pack(block) ^ pack(rateBlock));
         AsconState absorbedState = asconState;
@@ -144,29 +158,26 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
                 absorbedState[4][0] = absorbedState[4][0] ^ 1; // last bit of state
         end
 
-        if (flags.key) begin
-            secondPartKN <= !secondPartKN;
-            keyStore[secondPartKN ? 1 : 0] <= bytesToWord(block);
-        end else if (flags.npub) begin
-            secondPartKN <= !secondPartKN;
-            if (secondPartKN) begin
-                asconState <= initState(block, keyStore);
+        if (flags.npub) begin
+            loadNonceCounter <= loadNonceCounter + 1;
+            if (loadNonceCounter == 1) begin
+                asconState <= keyNonceInit(block, keyStore);
                 state <= Permute;
             end else
                 asconState[3] <= bytesToWord(block); // Npub_0
         end else begin
             asconState <= absorbedState;
-            if (!emptyAD) state <= Permute;
+            if (!emptyAD)
+                state <= Permute;
         end
         roundConstant <= initRC(pb);
         roundCounter <= pb ? fromInteger(valueOf(pa_cycles) - valueOf(pb_cycles)) : 0;
-        postPermuteState <= lastPtCtHash ? Squeeze : Idle;
-        squeezeCounter <= 0;
+        postPermuteState <= lastPtCtHash ? Squeeze : Absorb;
         squeezeHash <= flags.hash;
         return xoredBlock;
     endmethod
 
-    method ActionValue#(BlockOfSize#(8)) blockDown if (state == Squeeze);
+    method ActionValue#(BlockOfSize#(8)) squeeze if (state == Squeeze);
         squeezeCounter <= squeezeCounter + 1;
         if (squeezeCounter[0] == 1'b1 && (!squeezeHash || squeezeCounter[1] == 1'b1))
             state <= Idle;

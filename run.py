@@ -39,7 +39,9 @@ if not isinstance(designs, list):
 print(f"available designs: {', '.join(n for d in designs if (n := d.get('name')))}")
 xeda_design = next(filter(lambda d: d["name"] == args.design, designs), None)
 if xeda_design is None:
-    sys.exit(f"no design named {args.design} designs: {[d.get('name') for d in designs]}")
+    sys.exit(
+        f"no design named {args.design} designs: {[d.get('name') for d in designs]}"
+    )
 rtl_settings = xeda_design["rtl"]
 bluespec_sources = [
     f for f in rtl_settings["sources"] if f.endswith(".bsv") or f.endswith(".bs")
@@ -116,17 +118,23 @@ if args.gtkwave:
             pkg = pkg_groups.group(1)
 
             for td in typedef_enum_re.finditer(content):
+                print(f"td={td}")
                 td_body = td.group(1)
                 td_body = " ".join(
                     [x.split("//")[0].strip() for x in td_body.split("\n")]
                 )
                 td_name = td.group(2)
-                kvs_l1 = [re.split(r"\s*=\s*", x.strip()) for x in td_body.split(r"\s*,\s*")]
+                kvs_l1 = [
+                    re.split(r"\s*=\s*", x.strip())
+                    for x in re.split(r"\s*,\s*", td_body.strip())
+                ]
+                print(f"kvs_l1={kvs_l1}")
                 kvs_l = [
                     (x[0], x[1]) if len(x) == 2 else (x[0], i)
                     for i, x in enumerate(kvs_l1)
                 ]
                 kvs = {k: val_to_int(v) for k, v in kvs_l}
+                print(f"kvs={kvs}")
                 values: list[int] = [v[0] for v in kvs.values() if v[0] is not None]
                 sz = max(values)
                 if not sz:
@@ -147,8 +155,6 @@ if args.gtkwave:
         with open(gtkwave_dir / (tr_type_name + ".gwtr"), "w") as f:
             print(f"writing translation of {tr_type_name} into {f.name}")
             f.write(translate)
-    sys.exit(0)
-
 
 BLUESPEC_PREFIX = os.environ.get("BLUESPEC_PREFIX")
 # bsc_exec = os.path.join(BLUESPEC_PREFIX, 'bin', 'bsc') if BLUESPEC_PREFIX else shutil.which("bsc")
@@ -283,7 +289,7 @@ def bsc_generate_verilog():
             "-p",
             ":".join(lib_paths),
         ]
-    
+
     if vout_dir:
         cmd += [
             "-vdir",

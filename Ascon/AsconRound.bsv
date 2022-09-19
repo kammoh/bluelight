@@ -14,7 +14,8 @@ typedef Byte RoundConstant;
 
 // Ascon-128: 1,2,3,6
 // Ascon-128a: 1,2,4
-typedef 3 UnrollFactor;
+// typedef 3 UnrollFactor;
+typedef 1 UnrollFactor;
 
 function RoundConstant initRC(Bool pb);
     return pb ? (valueOf(PbRounds) == 8 ? 8'hb4 : 8'h96) : 8'hf0;

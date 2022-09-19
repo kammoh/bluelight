@@ -20,7 +20,6 @@ module mkAscon(CryptoCoreIfc);
     let inLayer <- mkInputLayer(padByte);
     let outLayer <- mkOutputLayer;
     let inState <- mkReg(InIdle);
-    // let change_state <- mkPulseWire;
 
     Reg#(Bool) isKey <- mkRegU;
     Reg#(Bool) isHM <- mkRegU;
@@ -64,7 +63,7 @@ module mkAscon(CryptoCoreIfc);
   // ================================================== Interfaces ==================================================
 
     method Action initOp(OpFlags op) if (inState == InIdle);
-        cipher.init(op);
+        cipher.initSponge(op);
         if (op.new_key)
             inState <= GetKey;
     endmethod
