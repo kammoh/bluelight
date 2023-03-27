@@ -57,6 +57,7 @@ sources = [
     "gen_rtl/lwc.v",
 ]
 top = "lwc"
+clock.port = "clk"
 
 [design.tb]
 sources = ["asconTb.py"]
