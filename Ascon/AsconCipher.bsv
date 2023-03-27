@@ -59,7 +59,17 @@ interface CipherIfc#(numeric type n_bytes, type flags_type);
     method ActionValue#(BlockOfSize#(8)) squeeze;
 endinterface
 
-module mkAsconCipher (CipherIfc#(BlockBytes, HeaderFlags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
+typedef struct {
+    Bool npub;         // nonce public
+    Bool ad;           // associated data
+    Bool ct;           // ciphertext
+    Bool ptct;         // PT or CT
+    Bool hm;           // hash message
+    Bool ptCtHm;       // PT or CT or HM
+    Bool ptCtAd;       // PT or CT or AD
+} Flags deriving(Bits, Eq, FShow);
+
+module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
     Reg#(AsconState) asconState <- mkRegU;
     let state <- mkReg(Idle);
     Reg#(State) postPermuteState <- mkRegU;
@@ -125,7 +135,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, HeaderFlags)) provisos (Mul#(Unroll
             state <= Absorb;
     endmethod
 
-    method ActionValue#(Block) absorb (Block block, ByteValids valids, Bool last, HeaderFlags flags) if (state == Absorb);
+    method ActionValue#(Block) absorb (Block block, ByteValids valids, Bool last, Flags flags) if (state == Absorb);
         Block rateBlock = wordsToBytes(take(asconState));
         Block xoredBlock = unpack(pack(block) ^ pack(rateBlock));
         AsconState absorbedState = asconState;
@@ -141,23 +151,29 @@ module mkAsconCipher (CipherIfc#(BlockBytes, HeaderFlags)) provisos (Mul#(Unroll
         // TODO move to flags:
         let emptyAD = flags.ad && first_block && !valids[0];
         let firstAD = flags.ad && first_block;
-        let lastPtCtHash = last && !flags.npub && !flags.ad;
-        let pb = !flags.hm && !flags.npub && !(flags.ptct && last);
+        let firstPtCt = flags.ptct && first_block;
+        let lastPtCt = flags.ptct && last;
+        let lastPtCtHash = last && flags.ptCtHm;
+        let pb = flags.ptCtAd && !(flags.ptct && last);
 
         if (!emptyAD)
             absorbedState[0] = bytesToWord(flags.ct ? ctBlock : xoredBlock); // FIXME
 
-        let k = 2;
-        if (firstAD) begin
-            for (Integer i = 0; i < k; i = i + 1)
-                absorbedState[5-k+i] = asconState[5-k+i] ^ storedKey[i];
-        end else if (flags.ptct) begin
-            if (last)
-                for (Integer i = 0; i < k; i = i + 1)
-                    absorbedState[rateWords + i] = asconState[rateWords + i] ^ storedKey[i];
-            if (first_block)
-                absorbedState[4][0] = absorbedState[4][0] ^ 1; // last bit of state
+        if (lastPtCt) begin
+            // for (Integer i = 0; i < 2; i = i + 1)
+            //     absorbedState[rateWords + i] = asconState[rateWords + i] ^ storedKey[i];
+            absorbedState[1] = asconState[1] ^ storedKey[0];
+            absorbedState[2] = asconState[2] ^ storedKey[1];
         end
+
+        if (firstAD) begin
+            // for (Integer i = 0; i < 2; i = i + 1)
+            //     absorbedState[3+i] = asconState[3+i] ^ storedKey[i];
+            absorbedState[3] = asconState[3] ^ storedKey[0];
+            absorbedState[4] = asconState[4] ^ storedKey[1];
+        end
+
+        absorbedState[4][0] = absorbedState[4][0] ^ pack(firstPtCt); // last bit of state
 
         if (flags.npub) begin
             loadNonceCounter <= loadNonceCounter + 1;

@@ -10,7 +10,19 @@ Compliant with [LWC Hardware API](https://cryptography.gmu.edu/athena/LWC/LWC_HW
 - Bluespec LWC support package `LwcApi`
 
 - CryptoCore implementations:
-  - [Xoodyak](xoodyak) (2 variants)
+  - [Ascon](Ascon)
+    - Ascon-128, Ascon-128a AEAD and Hash
+    - parameterized: unroll factor
+    - fastest available FPGA implementation
+    - winner of NIST LWC selection process
+  - [Gift-COFB](Gift-COFB)
+  - [Gimli](Gimli)
+  - [Sparkle](Sparkle)
+  - [subterranean](subterranean)
+  - [Xoodyak](xoodyak)
+    - AEAD and Hash
+    - 1x/2x unroll
+    - NIST LWC Round 2 and Round 3
 
 ### BlueLight CryptoCore Interface and API
 

@@ -24,8 +24,6 @@ module mkAscon(CryptoCoreIfc#(w__)) provisos (NumAlias#(w__, 32));
     // let inState <- mkReg(InIdle);
     let bdiFlags <- mkRegU; // LwcFlags
     
-    Reg#(Bool) isLast <- mkRegU;
-
     (* doc = "the output of inputLayer" *)
     Probe#(InputBlock#(8)) inBlock_probe <- mkProbe();
 
@@ -64,8 +62,27 @@ module mkAscon(CryptoCoreIfc#(w__)) provisos (NumAlias#(w__, 32));
     // last:        this is the last word of the type
     method Action loadData (Bit#(w__) data, Bit#(TDiv#(w__, 8)) valid_bytes, Bit#(TDiv#(w__, 8)) pad_loc, Bool last, HeaderFlags flags);
         inLayer.put(unpack(pack(data)), valid_bytes, last && !flags.npub);
-        bdiFlags <= flags;
-        isLast <= last;
+        bdiFlags <= Flags {
+            npub: flags.npub,
+            ad: flags.ad,
+            ct: flags.ct,
+            ptct: flags.ptct,
+            hm: flags.hm,
+            ptCtHm: !flags.npub && !flags.ad,
+            ptCtAd: !flags.npub && !flags.hm
+        };
+        // if (last || flags.npub)
+        //     first_block <= True;
+        // else
+        //     first_block <= False;
+        
+        // // TODO move to flags:
+        // let emptyAD = flags.ad && first_block && !valids[0];
+        // let firstAD = flags.ad && first_block;
+        // let firstPtCt = flags.ptct && first_block;
+        // let lastPtCt = flags.ptct && last;
+        // let lastPtCtHash = last && !flags.npub && !flags.ad;
+        // let pb = !flags.hm && !flags.npub && !(flags.ptct && last);
     endmethod
 
     interface FifoOut data_out;
