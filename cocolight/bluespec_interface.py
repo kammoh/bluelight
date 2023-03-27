@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, Union
 
-from cocotb.handle import HierarchyObject, NonHierarchyObject
+from cocotb.handle import HierarchyObject, ModifiableObject
 from cocotb.triggers import GPITrigger, ReadWrite, RisingEdge
 
 
@@ -51,8 +51,8 @@ class BsvStruct(BsvType):
 
 
 class BsvSignal:
-    def __init__(self, handle: NonHierarchyObject, typ: BsvType) -> None:
-        self.handle = handle
+    def __init__(self, handle: ModifiableObject, typ: BsvType) -> None:
+        self.handle: ModifiableObject = handle
         self.typ: BsvType = typ
 
 
@@ -67,16 +67,9 @@ class ActionMethod:
         self.dut = dut
         self.log = dut._log
 
-        def sig(s: str, notexist=None, check=False):
-            if not hasattr(dut, s):
-                if check:
-                    raise AttributeError(f"{s} not found")
-                return notexist
-            return getattr(dut, s)
-
-        self.en = sig("EN_" + name, check=True)
-        self.rdy = sig("RDY_" + name, check=True)
-        self.return_value_signal = sig(name)
+        self.en: ModifiableObject = getattr(dut, "EN_" + name)
+        self.rdy: ModifiableObject = getattr(dut, "RDY_" + name)
+        self.return_value_signal: Optional[ModifiableObject] = getattr(dut, name, None)
 
         if clock_edge is None:
             clock = None
@@ -87,10 +80,10 @@ class ActionMethod:
             assert clock
             clock_edge = RisingEdge(clock)
         self.clock_edge = clock_edge
+        self.en.setimmediatevalue(0)
 
     async def __call__(self, **kwargs):
-        self.en.value = 0
-        await ReadWrite()
+        await ReadWrite()  # ???
         while self.rdy.value != 1:
             await RisingEdge(self.rdy)
         self.en.value = 1
@@ -98,7 +91,6 @@ class ActionMethod:
             # self.log.info("setting %s to %s", name, value)
             handle = getattr(self.dut, self.prefix + "_" + name)
             handle.value = value
-        # assert self.rdy.value == 1
         await self.clock_edge
         self.en.value = 0
         if self.return_value_signal:

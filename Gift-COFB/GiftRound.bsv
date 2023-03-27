@@ -25,6 +25,16 @@ function GiftState subCells (GiftState s);
     s[1] = s[1] ^ s[3];
     s[3] = ~s[3];
     s[2] = s[2] ^ (s[0] & s[1]);
+    ///
+    // let s11 = s[1] ^ (s[0] & s[2]);
+    // let s01 = s[0] ^ (s11 & s[3]);
+    // let s21 = s[2] ^ (s01 | s11);
+    // let s31 = s[3] ^ s21;
+    // let s12 = s11 ^ s31;
+    // s[3] = ~s31;
+    // s[2] = s21 ^ (s01 & s12);
+    // s[1] = s12;
+    // s[0] = s01;
     return cons(s[3], cons(s[1], cons(s[2], cons(s[0], nil))));
 endfunction
 

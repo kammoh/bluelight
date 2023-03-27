@@ -33,6 +33,7 @@ class ForkJoinBase:
 
     async def join(self, timeout=None) -> None:
         if self._forked is not None:
+            timeout = None
             if timeout:
                 timer = Timer(timeout, units="ns")
                 first = await First(timer, self._forked)
@@ -186,9 +187,9 @@ class ValidReadyMonitor(ForkJoinBase):
             self.log.error(f"Monitor: '{self.name}' joined without receiving any data")
             raise TestError
 
-        if self.failures > 0:
-            self.log.error(f"[monitor:{self.name}] Number of Failures: {self.failures}")
-            raise TestFailure
+        assert self.failures == 0, self.log.error(
+            f"[monitor:{self.name}] Number of Failures: {self.failures}"
+        )
 
 
 class ValidReadyTester:

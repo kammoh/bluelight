@@ -1,0 +1,4 @@
+00 ?dark blue?SendHeader
+01 ?deep sky blue?SendData
+10 ?yellow green?VerifyTag
+11 ?orange?SendStatus

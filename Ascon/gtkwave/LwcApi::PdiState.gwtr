@@ -1,0 +1,7 @@
+000 ?dark blue?Pdi_GetInstruction
+001 ?deep sky blue?Pdi_Header
+010 ?yellow green?Pdi_Data
+011 ?orange?Pdi_GetTagHeader
+100 ?firebrick?Pdi_GetTagData
+101 ?blue violet?Pdi_SendEmpty
+110 ?brown?Pdi_EnqTagHeader

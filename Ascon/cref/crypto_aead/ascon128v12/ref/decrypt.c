@@ -64,6 +64,7 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
     U64_TO_BYTES(m, s.x0 ^ c0, 8);
     s.x0 = c0;
     P6(&s);
+    printstate("[DEC] after absorb CT permute:", s);
     clen -= RATE;
     m += RATE;
     c += RATE;
@@ -74,15 +75,16 @@ int crypto_aead_decrypt(unsigned char* m, unsigned long long* mlen,
   s.x0 |= c0;
   s.x0 ^= 0x80ull << (56 - 8 * clen);
   c += clen;
-  printstate("process plaintext:", s);
 
   // finalization
   s.x1 ^= K0;
   s.x2 ^= K1;
+  printstate("[DEC] finalize after mix key 1", s);
   P12(&s);
+  printstate("[DEC] finalize after P12", s);
   s.x3 ^= K0;
   s.x4 ^= K1;
-  printstate("finalization:", s);
+  printstate("[DEC] final after mix key 2", s);
 
   // verify tag
   if (BYTES_TO_U64(c, 8) != s.x3 || BYTES_TO_U64(c + 8, 8) != s.x4) {

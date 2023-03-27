@@ -21,7 +21,7 @@ class LwcAead:
         ...
 
     @typechecked
-    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, bytes]:
+    def decrypt(self, ct: bytes, ad: bytes, nonce: bytes, key: bytes, tag: bytes) -> Tuple[bool, Optional[bytes]]:
         ...
 
 

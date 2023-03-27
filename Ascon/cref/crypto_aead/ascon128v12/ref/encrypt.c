@@ -32,30 +32,35 @@ int crypto_aead_encrypt(unsigned char* c, unsigned long long* clen,
   s.x4 = N1;
   printstate("initial value:", s);
   P12(&s);
+  printstate("initial after P12:", s);
   s.x3 ^= K0;
   s.x4 ^= K1;
-  printstate("initialization:", s);
 
   // process associated data
   if (adlen) {
     while (adlen >= RATE) {
       s.x0 ^= BYTES_TO_U64(ad, 8);
+      printstate("after absorb AD:", s);
       P6(&s);
+      printstate("after absorb AD permute:", s);
       adlen -= RATE;
       ad += RATE;
     }
     s.x0 ^= BYTES_TO_U64(ad, adlen);
     s.x0 ^= 0x80ull << (56 - 8 * adlen);
+    printstate("after absorb AD done", s);
     P6(&s);
+    printstate("after absorb AD permute done", s);
   }
   s.x4 ^= 1;
-  printstate("process associated data:", s);
 
   // process plaintext
   while (mlen >= RATE) {
     s.x0 ^= BYTES_TO_U64(m, 8);
     U64_TO_BYTES(c, s.x0, 8);
+    printstate("after absorb PT:", s);
     P6(&s);
+    printstate("after absorb PT permute:", s);
     mlen -= RATE;
     m += RATE;
     c += RATE;
@@ -64,15 +69,16 @@ int crypto_aead_encrypt(unsigned char* c, unsigned long long* clen,
   s.x0 ^= 0x80ull << (56 - 8 * mlen);
   U64_TO_BYTES(c, s.x0, mlen);
   c += mlen;
-  printstate("process plaintext:", s);
 
   // finalization
   s.x1 ^= K0;
   s.x2 ^= K1;
+  printstate("finalize after mix key1", s);
   P12(&s);
+  printstate("finalization: after P12:", s);
   s.x3 ^= K0;
   s.x4 ^= K1;
-  printstate("finalization:", s);
+  printstate("final after mix key2", s);
 
   // set tag
   U64_TO_BYTES(c, s.x3, 8);

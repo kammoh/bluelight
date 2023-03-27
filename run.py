@@ -190,6 +190,12 @@ bsc_flags = [
 ]
 
 
+if False:
+    bsc_flags += [
+        "-reset-prefix",
+        "rst",
+    ]
+
 if args.debug:
     bsc_flags += [
         "-keep-fires",
@@ -204,8 +210,8 @@ else:
     bsc_flags += [
         "-promote-warnings",
         "G0010:G0005:G0117",
-        # '-warn-method-urgency',
-        # '-warn-action-shadowing',
+        "-warn-method-urgency",
+        "-warn-action-shadowing",
         "-remove-dollar",
         # '-sat-yices',
         "-remove-unused-modules",
@@ -213,17 +219,15 @@ else:
         "-remove-starved-rules",
         "-no-keep-fires",
         "-no-keep-inlined-boundaries",
-        "-show-range-conflict",
-        "-show-schedule",
-        "-sched-dot",
+        # "-show-range-conflict",
+        # "-show-schedule",
+        # "-sched-dot",
         # '-aggressive-conditions',  # DO NOT USE!!! BUGGY!!
         "-O",
         "-no-show-timestamps",  # regenerated files should be the same
         "-opt-undetermined-vals",
         "-unspecified-to",
         "X",
-        "-reset-prefix",
-        "rst",
     ]
 
 
@@ -312,7 +316,7 @@ def bsc_generate_verilog():
     try:
         subprocess.run(cmd, check=True)
     except Exception as e:
-        print(f"bsc failed with return code: {e.args[0]}")
+        # print(f"bsc failed with return code: {e.args[0]}")
         sys.exit(1)
 
     flags = get_bsc_flags()

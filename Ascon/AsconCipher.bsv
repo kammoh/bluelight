@@ -1,5 +1,6 @@
 package AsconCipher;
 
+import Vector :: *;
 import BluelightUtils :: *;
 import CryptoCore :: *;
 import AsconRound :: *;
@@ -40,42 +41,38 @@ function Vector#(n_bytes, Byte) wordsToBytes(Vector#(n_words, AsconWord) words) 
     return unpack(pack(x));
 endfunction
 
-typedef struct{
-    Bool npub;
-    Bool ad;
-    Bool ptct;
-    Bool ct;
-    Bool hash;
-    Bool first;
-    Bool last;
-} Flags deriving(Bits, Eq, FShow);
+typedef 128 KeyBits;
+typedef 128 NonceBits;
 
-typedef 2 KeyWords;
+typedef TDiv#(KeyBits, 32) NumKeyWords;
 
 interface CipherIfc#(numeric type n_bytes, type flags_type);
     // optional operation-specific initialization
-    method Action init(OpFlags op);
+    method Action start (OpFlags op);
     
-    method Action key(BlockOfSize#(n_bytes) block);
+    // load key into internal key buffer
+    method Action loadKey (CoreWord word, Bool last);
 
-    // method Action storeKey(CoreWord w);
     // block in/out
-    method ActionValue#(BlockOfSize#(n_bytes)) absorb(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, flags_type flags); 
+    method ActionValue#(BlockOfSize#(n_bytes)) absorb(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, Bool last, flags_type flags); 
     // block out
     method ActionValue#(BlockOfSize#(8)) squeeze;
 endinterface
 
-module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds),Mul#(UnrollFactor, pb_cycles, PbRounds));
+module mkAsconCipher (CipherIfc#(BlockBytes, HeaderFlags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
     Reg#(AsconState) asconState <- mkRegU;
     let state <- mkReg(Idle);
     Reg#(State) postPermuteState <- mkRegU;
-    Reg#(Vector#(KeyWords,AsconWord)) keyStore <- mkRegU;
+
+    Reg#(Vector#(NumKeyWords, CoreWord)) keyStore <- mkRegU;
     Reg#(Bit#(TLog#(pa_cycles))) roundCounter <- mkRegU;
     Reg#(RoundConstant) roundConstant <- mkRegU;
     Reg#(Bit#(2)) squeezeCounter <- mkRegU; // 2 bits if supports hash, o/w 1 bit
-    Reg#(Bit#(1)) loadKeyCounter <- mkRegU; // which part of key is loading
-    Reg#(Bit#(1)) loadNonceCounter <- mkRegU;
+    Reg#(Bit#(TLog#(TDiv#(NonceBits, TMul#(BlockBytes, 8))))) loadNonceCounter <- mkRegU;
     Reg#(Bool) squeezeHash <- mkRegU;
+    Reg#(Bool) first_block <- mkRegU; // first block of a type
+
+    Vector#(2, AsconWord) storedKey = reverse(unpack(pack(reverse(keyStore))));
 
     let rateWords = valueOf(RateWords);
 
@@ -109,7 +106,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
     endfunction
 
     // Must be called before any operation
-    method Action init(OpFlags op) if (state == Idle);
+    method Action start (OpFlags op) if (state == Idle);
         if(op.hash) begin
             asconState <= unpack(pack(zeroExtend(getIV(True))));
             roundConstant <= initRC(False);
@@ -117,51 +114,55 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         state <= op.hash ? Permute : op.new_key ? LoadKey : LoadKey;
         postPermuteState <= Absorb;
         roundCounter <= 0;
-        loadKeyCounter <= 0;
         loadNonceCounter <= 0;
         squeezeCounter <= 0;
+        first_block <= True;
     endmethod
 
-    method Action key(Block block) if (state == LoadKey);
-        keyStore <= shiftInAtN(keyStore, bytesToWord(block));
-        loadKeyCounter <= loadKeyCounter + 1;
-        if (loadKeyCounter == 1)
+    method Action loadKey (CoreWord word, Bool last) if (state == LoadKey);
+        keyStore <= shiftInAtN(keyStore, swapEndian(pack(word)));
+        if (last)
             state <= Absorb;
     endmethod
 
-    method ActionValue#(Block) absorb(Block block, ByteValids valids, Flags flags) if (state == Absorb);
+    method ActionValue#(Block) absorb (Block block, ByteValids valids, Bool last, HeaderFlags flags) if (state == Absorb);
         Block rateBlock = wordsToBytes(take(asconState));
         Block xoredBlock = unpack(pack(block) ^ pack(rateBlock));
         AsconState absorbedState = asconState;
         Block ctBlock = xoredBlock;
         for (Integer i = 0; i < valueOf(BlockBytes); i = i + 1) 
             if (valids[i]) ctBlock[i] = block[i];
+
+        if (last || flags.npub)
+            first_block <= True;
+        else
+            first_block <= False;
         
         // TODO move to flags:
-        let emptyAD = flags.ad && flags.first && !valids[0];
-        let firstAD = flags.ad && flags.first;
-        let lastPtCtHash = flags.last && !flags.npub && !flags.ad;
-        let pb = !flags.hash && !flags.npub && !(flags.ptct && flags.last);
+        let emptyAD = flags.ad && first_block && !valids[0];
+        let firstAD = flags.ad && first_block;
+        let lastPtCtHash = last && !flags.npub && !flags.ad;
+        let pb = !flags.hm && !flags.npub && !(flags.ptct && last);
 
         if (!emptyAD)
             absorbedState[0] = bytesToWord(flags.ct ? ctBlock : xoredBlock); // FIXME
 
-        let k = valueOf(KeyWords);
+        let k = 2;
         if (firstAD) begin
             for (Integer i = 0; i < k; i = i + 1)
-                absorbedState[5-k+i] = asconState[5-k+i] ^ keyStore[i];
+                absorbedState[5-k+i] = asconState[5-k+i] ^ storedKey[i];
         end else if (flags.ptct) begin
-            if (flags.last)
+            if (last)
                 for (Integer i = 0; i < k; i = i + 1)
-                    absorbedState[rateWords + i] = asconState[rateWords + i] ^ keyStore[i];
-            if (flags.first)
+                    absorbedState[rateWords + i] = asconState[rateWords + i] ^ storedKey[i];
+            if (first_block)
                 absorbedState[4][0] = absorbedState[4][0] ^ 1; // last bit of state
         end
 
         if (flags.npub) begin
             loadNonceCounter <= loadNonceCounter + 1;
             if (loadNonceCounter == 1) begin
-                asconState <= keyNonceInit(block, keyStore);
+                asconState <= keyNonceInit(block, storedKey);
                 state <= Permute;
             end else
                 asconState[3] <= bytesToWord(block); // Npub_0
@@ -173,7 +174,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         roundConstant <= initRC(pb);
         roundCounter <= pb ? fromInteger(valueOf(pa_cycles) - valueOf(pb_cycles)) : 0;
         postPermuteState <= lastPtCtHash ? Squeeze : Absorb;
-        squeezeHash <= flags.hash;
+        squeezeHash <= flags.hm;
         return xoredBlock;
     endmethod
 
@@ -189,7 +190,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
         roundConstant <= initRC(False); // P_a for hash
 
         return unpack(
-            swapEndian(squeezeHash ? asconState[0] : asconState[squeezeCounter[0] == 1'b1 ? 4 : 3] ^ keyStore[squeezeCounter[0]])
+            swapEndian(squeezeHash ? asconState[0] : asconState[squeezeCounter[0] == 1'b1 ? 4 : 3] ^ storedKey[squeezeCounter[0]])
         );
     endmethod
 endmodule

@@ -10,7 +10,7 @@ typedef Bit#(64) AsconWord;
 typedef Vector#(5, AsconWord) AsconState; // S_r (rate)
 typedef Byte RoundConstant;
 
-`define LUT_SUBS
+// `define LUT_SUBS
 
 // Ascon-128: 1,2,3,6
 // Ascon-128a: 1,2,4

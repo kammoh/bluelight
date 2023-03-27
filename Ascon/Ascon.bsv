@@ -1,110 +1,80 @@
 package Ascon;
 
 import Vector :: *;
+import Probe :: * ;
+
+import LwcApi :: *;
 import BluelightUtils :: *;
 import InputLayer :: *;
 import OutputLayer :: *;
-import CryptoCore :: *;
 import AsconCipher :: *;
-import LwcApi :: *;
+import CryptoCore :: *;
 
-typedef enum {
-    InIdle, // waiting on process command
-    GetKey, // waiting on process command
-    GetBdi  // receive from bdi
-} InputState deriving(Bits, Eq);
+// typedef enum {
+//     InIdle, // waiting on process command
+//     GetKey, // waiting on process command
+//     GetBdi  // receive from bdi
+// } InputState deriving(Bits, Eq);
 
-module mkAscon(CryptoCoreIfc);
+module mkAscon(CryptoCoreIfc#(w__)) provisos (NumAlias#(w__, 32));
     let cipher <- mkAsconCipher;
     Byte padByte = 8'h80;
     let inLayer <- mkInputLayer(padByte);
     let outLayer <- mkOutputLayer;
-    let inState <- mkReg(InIdle);
+    // let inState <- mkReg(InIdle);
+    let bdiFlags <- mkRegU; // LwcFlags
+    
+    Reg#(Bool) isLast <- mkRegU;
 
-    Reg#(Bool) isKey <- mkRegU;
-    Reg#(Bool) isHM <- mkRegU;
-    Reg#(Bool) isCT <- mkRegU;
-    Reg#(Bool) isPTCT <- mkRegU; // PT or CT
-    Reg#(Bool) isNpub <- mkRegU;
-    Reg#(Bool) isAD <- mkRegU;
-    Reg#(Bool) first <- mkRegU;
-    Reg#(Bool) last <- mkRegU;
+    (* doc = "the output of inputLayer" *)
+    Probe#(InputBlock#(8)) inBlock_probe <- mkProbe();
 
   // ==================================================== Rules =====================================================
 
-    // (* fire_when_enabled *)
-    // rule rl_change_state if (change_state);
-    //     if (inState == )
-    //         inState <= GetBdi;
-    //     else if (inState == InIdle)
-    //         inState <= InIdle;
-    // endrule
-    
-    (* fire_when_enabled *)
-    rule rl_encipher if (inState == GetBdi);
-        match {.inBlock, .valids} <- inLayer.get;
-        let last_block = last && !inLayer.extraPad;
 
-        let outBlock <- cipher.blockUp(inBlock, valids, Flags {key:isKey, npub:isNpub, ad:isAD, ptct:isPTCT, ct:isCT, hash:isHM, first:first, last:last_block});
-        
-        if (isPTCT)
-            outLayer.enq(outBlock, valids);
-        if (last_block)
-            inState <= InIdle;
-        first <= False;
+    (* fire_when_enabled *)
+    rule rl_get_inlayer;
+        let inBlock <- inLayer.get;
+        inBlock_probe <= inBlock;
+        let outBlock <- cipher.absorb(inBlock.data, inBlock.valid_bytes, inBlock.last, bdiFlags);
+        if (bdiFlags.ptct)
+            outLayer.enq(outBlock, inBlock.valid_bytes);
     endrule
 
     (* fire_when_enabled *)
     rule rl_squeeze_tag_or_digest;
-        let out <- cipher.blockDown;
+        let out <- cipher.squeeze;
         outLayer.enq(out, replicate(True));
     endrule 
 
   // ================================================== Interfaces ==================================================
 
-    method Action initOp(OpFlags op) if (inState == InIdle);
-        cipher.initSponge(op);
-        if (op.new_key)
-            inState <= GetKey;
-    endmethod
-
-    // meta-data, header
-    // after fire, anticipate bdi words of this type, unless flags.empty == True.
-    method Action anticipate (HeaderFlags flags) if (inState == InIdle);
-        // only AD, CT, PT, HM can be empty
-        if (flags.empty) inLayer.put(unpack(zeroExtend(padByte)), True, False, 0, True);
-        inState <= GetBdi;
-        first  <= True;
-        last   <= flags.eoi;
-        isKey  <= False;
-        isNpub <= flags.npub;
-        isHM   <= flags.hm;
-        isCT   <= flags.ct;
-        isAD   <= flags.ad;
-        isPTCT <= flags.ptct;
+    method Action start(OpFlags op);
+        cipher.start(op);
     endmethod
 
     // Receive a word of the key
-    method Action key (CoreWord w, Bool lst)  if (inState == GetKey);
-        inLayer.put(unpack(pack(w)), lst, False, 0, False);
-        last <= lst;
-        isKey <= True;
-        inState <= GetBdi;
+    method Action loadKey (Bit#(w__) data, Bool last);
+        cipher.loadKey(data, last);
     endmethod
 
     // Receive a word of Public Nonce, Associated Data, Plaintext, Ciphertext, or Hash Message
     // data:        data word
     // valid_bytes: bit array indicating which bytes in `data` are valid
     // last:        this is the last word of the type
-    method Action bdi (CoreWord data, ValidBytes#(CoreWord) valid_bytes, Bool last, HeaderFlags flags) if (inState == GetBdi);
-        inLayer.put(unpack(pack(data)), last, last && !flags.npub, i.padarg, False);
-        last <= i.last;
+    method Action loadData (Bit#(w__) data, Bit#(TDiv#(w__, 8)) valid_bytes, Bit#(TDiv#(w__, 8)) pad_loc, Bool last, HeaderFlags flags);
+        inLayer.put(unpack(pack(data)), valid_bytes, last && !flags.npub);
+        bdiFlags <= flags;
+        isLast <= last;
     endmethod
 
-    interface FifoOut bdo;
+    interface FifoOut data_out;
         method deq = outLayer.deq;
         method first;
-            return BdIO {word: outLayer.first, last: outLayer.isLast, padarg: 0};
+            return WithLast {
+                data: clear_invalid_bytes_cond(outLayer.first, outLayer.first_valid_bytes, outLayer.isLast),
+                last: outLayer.isLast
+            };
         endmethod
         method notEmpty = outLayer.notEmpty;
     endinterface

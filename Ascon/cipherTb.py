@@ -19,6 +19,11 @@ sys.path.append(COCOLIGHT_DIR)
 sys.path.append(SCRIPT_DIR)
 
 
+def debug(*values) -> None:
+    if False:
+        print(*values)
+
+
 class Cref(LwcCffi, LwcAead):
     """Python wrapper for C-Reference implementation"""
 
@@ -27,22 +32,30 @@ class Cref(LwcCffi, LwcAead):
         aead_algorithm,
         hash_algorithm=None,
         root_cref_dir=Path(SCRIPT_DIR) / "cref",
+        force_recompile=False,
     ) -> None:
         Cref.aead_algorithm = aead_algorithm
         Cref.hash_algorithm = hash_algorithm
         Cref.root_cref_dir = root_cref_dir
-        LwcCffi.__init__(self, force_recompile=False)
+        LwcCffi.__init__(self, force_recompile=force_recompile)
 
 
-ref = Cref(aead_algorithm="ascon128v12", hash_algorithm="asconhashv12")
+ref = Cref(
+    aead_algorithm="ascon128v12", hash_algorithm="asconhashv12", force_recompile=False
+)
 block_bits = dict(AD=64, PT=64)
 
+
+# HACKY! The fields MUST match exactly (order, name, type, ...) with struct definition in CryptoCore.bsv
 flags_t = BsvStruct(
     npub=BsvBool(),
     ad=BsvBool(),
-    ptct=BsvBool(),
+    pt=BsvBool(),
     ct=BsvBool(),
-    hash=BsvBool(),
+    ptct=BsvBool(),
+    hm=BsvBool(),
+    empty=BsvBool(),
+    eor=BsvBool(),
     first=BsvBool(),
     last=BsvBool(),
 )
@@ -73,7 +86,7 @@ class CipherTb:
         self.clock_edge = RisingEdge(self.clock)
         # dict(block=BsvBits(block_bytes*8), valids=BsvBits(block_bytes), flags=flags_t),
         self.init = ActionMethod("init", dut, self.clock_edge)
-        self.key = ActionMethod("key", dut, self.clock_edge)
+        self.loadKey = ActionMethod("loadKey", dut, self.clock_edge)
         self.absorb = ActionMethod("absorb", dut, self.clock_edge)
         self.squeeze = ActionMethod("squeeze", dut, self.clock_edge)
         if hasattr(dut, "rst"):
@@ -85,8 +98,6 @@ class CipherTb:
 
     async def start(self, clock_period=10):
         clock = self.clock
-        self.absorb.en.value = 0
-        self.squeeze.en.value = 0
         self.log.info("starting clock...")
         time_unit = "step"
         await cocotb.start(Clock(clock, clock_period, time_unit).start())
@@ -126,17 +137,18 @@ class CipherTb:
         return rets
 
     async def load_key(self, key: bytes):
-        width = self.block_bytes
-        Block = BsvBits(width * 8)
+        bit_width = len(self.dut.loadKey_word)
+        w = bit_width // 8
+        CoreWord = BsvBits(bit_width)
         ld = len(key)
-        for i in range(0, ld, width):
-            block = key[i : i + width]
-            await self.key(block=Block(block))
+        for i in range(0, ld, w):
+            word = key[i : i + w]
+            await self.loadKey(word=CoreWord(word), last=i + w >= ld)
 
 
-def get_bytes(n_bytes, rand=False):
-    # if rand:
-    #     return rand_bytes(n_bytes)
+def get_bytes(n_bytes, rand=True):
+    if rand:
+        return rand_bytes(n_bytes)
     return bytes(range(n_bytes))
 
 
@@ -145,12 +157,12 @@ async def debug_enc(dut: HierarchyObject):
     tb = CipherTb(dut, flags_t, block_bytes=8, pad_byte=0x80, pad_extra_block=True)
     await tb.start()
 
-    rand = False
+    rand = True
 
     key = get_bytes(ref.CRYPTO_KEYBYTES, rand)
     npub = get_bytes(ref.CRYPTO_NPUBBYTES, rand)
-    ad = get_bytes(16, rand)
-    pt = get_bytes(1, rand)
+    ad = get_bytes(1, rand)
+    pt = get_bytes(33, rand)
     ct, tag = ref.encrypt(pt=pt, ad=ad, npub=npub, key=key)
 
     tb.log.info("initialize op: %s", dict(new_key=1, decrypt=0, hash=0))
@@ -163,19 +175,19 @@ async def debug_enc(dut: HierarchyObject):
     await tb.absorb_bytes(npub, pad=False, npub=1, eoi=(len(ad) == 0 and len(pt) == 0))
     tb.log.info("sending AD=%s (%d bits)", ad.hex(), len(ad) * 8)
     await tb.absorb_bytes(ad, pad=True, ad=1, eoi=(len(ad) != 0 and len(pt) == 0))
-    print("sending PT...")
+    tb.log.info("sending PT...")
     r = await tb.absorb_bytes(pt, pad=True, ptct=1, eoi=(len(pt) != 0))
 
     out = vals2bytes(r)[: len(pt)]
-    print(f" received CT: {out.hex()}")
+    tb.log.info(f"received CT: {out.hex()}")
     assert out == ct
 
     r = [await tb.squeeze(), await tb.squeeze()]
     out = vals2bytes(r)
-    print(f" received tag: {out.hex()}")
+    tb.log.info(f"received tag: {out.hex()}")
     assert tag == out
 
-    for _ in range(20):
+    for _ in range(10):
         await tb.clock_edge
 
 
@@ -184,7 +196,7 @@ async def debug_dec(dut: HierarchyObject):
     tb = CipherTb(dut, flags_t, block_bytes=8, pad_byte=0x80, pad_extra_block=True)
     await tb.start()
 
-    rand = False
+    rand = True
 
     key = get_bytes(ref.CRYPTO_KEYBYTES, rand)
     npub = get_bytes(ref.CRYPTO_NPUBBYTES, rand)
@@ -192,29 +204,29 @@ async def debug_dec(dut: HierarchyObject):
     pt = get_bytes(0, rand)
     ct, tag = ref.encrypt(pt=pt, ad=ad, npub=npub, key=key)
 
-    print("\n\n decrypt:")
+    debug("\n\n decrypt:")
     pt2 = ref.decrypt(ct=ct, ad=ad, npub=npub, key=key, tag=tag)
     assert pt2 == pt
 
-    print(f"ad={ad.hex()}\npt={pt.hex()}\nct={ct.hex()}\ntag={tag.hex()}")
+    debug(f"ad={ad.hex()}\npt={pt.hex()}\nct={ct.hex()}\ntag={tag.hex()}")
     tb.log.info("initialize op: %s", dict(new_key=1, decrypt=0, hash=0))
     await tb.init(op=OpFlags(new_key=1, decrypt=0, hash=0))
     tb.log.info("sending key: %s", key.hex())
     await tb.load_key(key)
-    print("sending npub...")
+    debug("sending npub...")
     await tb.absorb_bytes(npub, pad=False, npub=1, eoi=(len(ad) == 0 and len(pt) == 0))
-    print("sending AD...")
+    debug("sending AD...")
     await tb.absorb_bytes(ad, pad=True, ad=1, eoi=(len(ad) != 0 and len(pt) == 0))
-    print("sending CT...")
+    debug("sending CT...")
     r = await tb.absorb_bytes(ct, pad=True, ct=1, ptct=1, eoi=(len(ct) != 0))
 
     out = vals2bytes(r)[: len(ct)]
-    print(f" received PT: {out.hex()}")
+    debug(f" received PT: {out.hex()}")
     assert out == pt
 
     r = [await tb.squeeze(), await tb.squeeze()]
     out = vals2bytes(r)
-    print(f" received tag: {out.hex()}")
+    debug(f" received tag: {out.hex()}")
     assert tag == out
 
     for _ in range(1):
@@ -261,7 +273,7 @@ async def test_enc(dut: HierarchyObject):
             pt = rand_bytes(pt_sz)
             ct, tag = ref.encrypt(pt=pt, ad=ad, npub=npub, key=key)
 
-            print(
+            debug(
                 f"key={key.hex()}   npub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\nct={ct.hex()}\ntag={tag.hex()}"
             )
             tb.log.info("initialize op: %s", dict(new_key=1, decrypt=0, hash=0))
@@ -269,24 +281,24 @@ async def test_enc(dut: HierarchyObject):
             tb.log.info("sending key: %s", key.hex())
             await tb.load_key(key)
 
-            print("sending npub...")
+            debug("sending npub...")
             await tb.absorb_bytes(
                 npub, pad=False, npub=1, eoi=(len(ad) == 0 and len(pt) == 0)
             )
-            print("sending AD...")
+            debug("sending AD...")
             await tb.absorb_bytes(
                 ad, pad=True, ad=1, eoi=(len(ad) != 0 and len(pt) == 0)
             )
-            print("sending PT...")
+            debug("sending PT...")
             r = await tb.absorb_bytes(pt, pad=True, ptct=1, eoi=(len(pt) != 0))
 
             out = vals2bytes(r)[: len(pt)]
-            print(f" received ct: {out.hex()}")
+            debug(f" received ct: {out.hex()}")
             assert out == ct
 
             r = [await tb.squeeze(), await tb.squeeze()]
             out = vals2bytes(r)
-            print(f" received tag: {out.hex()}")
+            debug(f" received tag: {out.hex()}")
             assert tag == out
             await tb.clock_edge
 
@@ -333,7 +345,7 @@ async def test_dec(dut: HierarchyObject):
             # pt2 = ref.decrypt(ct=ct, ad=ad, npub=npub, key=key, tag=tag)
             # assert pt2 == pt
 
-            print(
+            debug(
                 f"key={key.hex()} npub={npub.hex()}\nad={ad.hex()}\npt={pt.hex()}\nct={ct.hex()}\ntag={tag.hex()}"
             )
 
@@ -342,24 +354,24 @@ async def test_dec(dut: HierarchyObject):
             tb.log.info("sending key: %s", key.hex())
             await tb.load_key(key)
 
-            print("sending npub...")
+            debug("sending npub...")
             await tb.absorb_bytes(
                 npub, pad=False, npub=1, eoi=(len(ad) == 0 and len(pt) == 0)
             )
-            print("sending AD...")
+            debug("sending AD...")
             await tb.absorb_bytes(
                 ad, pad=True, ad=1, eoi=(len(ad) != 0 and len(pt) == 0)
             )
-            print("sending CT...")
+            debug("sending CT...")
             r = await tb.absorb_bytes(ct, pad=True, ct=1, ptct=1, eoi=(len(ct) != 0))
 
             out = vals2bytes(r)[: len(ct)]
-            print(f" received PT: {out.hex()}")
+            debug(f" received PT: {out.hex()}")
             assert out == pt
 
             r = [await tb.squeeze(), await tb.squeeze()]
             out = vals2bytes(r)
-            print(f" received tag: {out.hex()}")
+            debug(f" received tag: {out.hex()}")
             assert tag == out
 
     await tb.clock_edge
@@ -378,14 +390,14 @@ async def test_dec(dut: HierarchyObject):
 #     for sz in sizes:
 #         msg = rand_bytes(sz)
 #         digest = ref.hash(msg)
-#         print(f'msg={msg.hex()}\ndigest={digest.hex()}')
+#         debug(f'msg={msg.hex()}\ndigest={digest.hex()}')
 
-#         print("sending hash message...")
+#         debug("sending hash message...")
 #         await tb.blockin(msg + b'\1', hash=1)
 
 #         r = [await tb.blockDown(), await tb.blockDown()]
 #         out = vals2bytes(r)
-#         print(f" out digest = {out.hex()}")
+#         debug(f" out digest = {out.hex()}")
 #         assert digest == out
 
 #     await tb.clock_edge

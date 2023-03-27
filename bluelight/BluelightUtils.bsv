@@ -30,7 +30,7 @@ function w__ _xor (w__ a, w__ b) provisos (Bitwise#(w__)) = a ^ b;
 function Vector#(n, w__) xorVecs(Vector#(n, w__) v1, Vector#(n, w__) v2)
     provisos (Bits#(w__, w_bits__), Bitwise#(w__), Add#(1, a__, n)) = zipWith(_xor, v1, v2);
 
-typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) InLayerToCipher#(numeric type n_bytes);
+typedef Tuple2#(BlockOfSize#(n_bytes), ByteValidsOfSize#(n_bytes)) BytesWithValids#(numeric type n_bytes);
 
 
 endpackage

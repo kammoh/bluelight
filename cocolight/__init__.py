@@ -166,6 +166,9 @@ class LwcRefCheckerTb(LwcTb):
         ad = self.gen_inputs(ad_size)
         pt = self.gen_inputs(ct_size)
         ct, tag = self.ref.encrypt(pt, ad, npub, key)
+        pt2 = self.ref.decrypt(ct, ad, npub, key, tag)
+        assert pt2 is not None
+        assert pt2 == pt
         if self.debug:
             print(f'key={key.hex()}\nnpub={npub.hex()}\nad={ad.hex()}\n' +
                   f'pt={pt.hex()}\n\nct={ct.hex()}\ntag={tag.hex()}')

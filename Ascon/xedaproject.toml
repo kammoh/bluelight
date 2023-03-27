@@ -11,9 +11,12 @@ algorithm = ['ascon128v12']
 
 [design.rtl]
 sources = [
-    '../bluelight/BluelightUtils.bsv',
-    '../bluelight/CryptoCore.bsv',
-    '../bluelight/Bus/Bus.bsv',
+    "../bluelight/Bus/BusDefines.bsv",
+    "../bluelight/Bus/BusFIFO.bsv",
+    "../bluelight/Bus/Bus.bsv",
+    "../bluelight/LwcApiDefines.bsv",
+    "../bluelight/CryptoCore.bsv",
+    "../bluelight/LwcApi.bsv",
     'AsconRound.bsv',
     'AsconCipher.bsv',
 ]
@@ -21,28 +24,48 @@ top = 'mkAsconCipher'
 
 [design.tb]
 sources = ["cipherTb.py"]
-cocotb = { module = 'cipherTb' }
+cocotb = true
 
 [[design]]
 name = 'Ascon'
 
 [design.rtl]
 sources = [
-    '../bluelight/BluelightUtils.bsv',
-    '../bluelight/Bus/BusDefines.bsv',
-    '../bluelight/Bus/BusFIFO.bsv',
-    '../bluelight/Bus/Bus.bsv',
-    '../bluelight/CryptoCore.bsv',
-    '../bluelight/LwcApi.bsv',
+    "../bluelight/Bus/BusDefines.bsv",
+    "../bluelight/Bus/BusFIFO.bsv",
+    "../bluelight/Bus/Bus.bsv",
+    "../bluelight/LwcApiDefines.bsv",
+    "../bluelight/BluelightUtils.bsv",
+    "../bluelight/CryptoCore.bsv",
+    "../bluelight/LwcApi.bsv",
+    'AsconRound.bsv',
     'AsconCipher.bsv',
     'InputLayer.bsv',
-    'PISO.bsv',
+    'OutputLayer.bsv',
     'Ascon.bsv',
     'AsconLwc.bsv',
 ]
 top = 'lwc'
 
 
+[[design]]
+name = 'verilog'
+
+[design.rtl]
+# generator = "xeda run bsc --design-name Ascon"
+sources = [
+    "gen_rtl/lwc.v",
+]
+top = "lwc"
+
 [design.tb]
 sources = ["asconTb.py"]
-cocotb = { module = 'asconTb' }
+cocotb = true
+
+
+[flow.bsc]
+verilog_out_dir = "${design_root}/gen_rtl"
+optimize = true
+debug = false
+gtkwave_package = "AsconLwc"
+

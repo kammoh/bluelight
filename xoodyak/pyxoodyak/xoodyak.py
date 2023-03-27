@@ -211,10 +211,6 @@ class Xoodoo:
         for i, d in enumerate(data[data_offset:]):
             self.add_byte(d, i + offset)
 
-        # unoptimized:
-        # for i, d in enumerate(data):
-        #     self.add_byte(d, i + offset)
-
     def extract_and_addbytes(self, input: bytes, offset: int = 0) -> bytes:
         ilen = len(input)
         assert offset < State.NBYTES
@@ -300,7 +296,7 @@ class Cyclist:
                 break
         return bytes(out)
 
-    def _absorb_any(self, x: bytes, cd: int, r: int = None) -> None:
+    def _absorb_any(self, x: bytes, cd: int, r: Optional[int] = None) -> None:
         if r is None:
             r = self.r_absorb
         xlen = len(x)
@@ -319,7 +315,7 @@ class Cyclist:
     def absorb(self, x: bytes) -> None:
         self._absorb_any(x, 0x03)
 
-    def _absorb_key(self, key: bytes, id: bytes = b"", counter: bytes = None) -> None:
+    def _absorb_key(self, key: bytes, id: bytes = b"", counter: Optional[bytes] = None) -> None:
         assert self.mode == Cyclist.Mode.Hash
         self.mode = Cyclist.Mode.Keyed
         self.r_absorb = Xoodyak_Rkin
@@ -363,7 +359,7 @@ class XoodyakOrig(LwcAead, LwcHash):
         if self.debug:
             print(f"Xoodyak is in Debug ({self.debug}) mode!")
 
-    def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> bytes:
+    def encrypt(self, pt: bytes, ad: bytes, nonce: bytes, key: bytes) -> Tuple[bytes, bytes]:
         self.cyclist.initialize(key)
         self.cyclist.dump_state(f"Aft. absorb key")
         self.cyclist.absorb(nonce)
@@ -372,12 +368,14 @@ class XoodyakOrig(LwcAead, LwcHash):
         self.cyclist.dump_state(f"Aft. absorb ad")
         ct = self.cyclist.crypt(pt, decrypt=False)
         self.cyclist.dump_state(f"Aft. crypt ad")
+        assert self.CRYPTO_ABYTES
         tag = self.cyclist.squeeze(self.CRYPTO_ABYTES)
         return tag, ct
 
     def decrypt(
         self, ct: bytes, ad: bytes, nonce: bytes, key: bytes
     ) -> Tuple[bool, Optional[bytes]]:
+        assert self.CRYPTO_ABYTES
         if len(ct) < self.CRYPTO_ABYTES:
             return False, None
         self.cyclist.initialize(key)

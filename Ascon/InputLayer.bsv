@@ -1,102 +1,114 @@
 package InputLayer;
 
 import Vector :: *;
+import Probe :: *;
+
 import CryptoCore :: *;
 import BluelightUtils :: *;
 
-// TODO option to use shift-register for large block sizes?
-
-function Bit#(4) padargToValids(Bool pad, PadArg padarg);
-    return case(tuple2(pad, padarg)) matches
-        {True, 2'd1} : 4'b0001;
-        {True, 2'd2} : 4'b0011;
-        {True, 2'd3} : 4'b0111;
-        default      : 4'b1111;
-    endcase;
-endfunction
-
-typedef struct {
-    Vector#(n_bytes, Byte) data;
-    Vector#(n_bytes, Bool) valid_bytes;
+typedef struct  {
     Bool last;
-} SipoIo#(numeric type n_bytes);
+    ByteValidsOfSize#(n_bytes) valid_bytes;
+    BlockOfSize#(n_bytes) data;
+} InputBlock#(numeric type n_bytes) deriving (FShow, Bits);
 
-interface SipoIfc#(numeric type n_out_bytes);
-    method Action put(SipoIo#(CoreWordBytes) i);
-    method ActionValue#(SipoIo#(n_out_bytes)) get;
-    (* always_ready *)
-    method Bool canPut;
-    (* always_ready *)
-    method Bool canGet;
+interface InputLayerIfc#(numeric type n_out_bytes);
+    method Action put(CoreWord data, ValidBytes#(CoreWord) valid_bytes, Bool last);
+    method ActionValue#(InputBlock#(n_out_bytes)) get;
 endinterface
 
-// module mkInputLayer#(Byte cipherPadByte) (SipoIfc#(32)) provisos (Mul#(block_words, CoreWordBytes, n_out_bytes), Add#(a__, 4, n_out_bytes), Add#(c__, 32, TMul#(n_out_bytes, 8)));
-//     //==== Registers ====//
-//     Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
-//     Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
-//     Reg#(Bit#(TLog#(TAdd#(block_words, 1)))) counter <- mkReg(0);
-//     let closed <- mkReg(False);
-//     let needsPad <- mkReg(False); // only set with with closing word
+typedef 4 CoreWordBytes;
+
+module mkInputLayer#(Byte cipherPadByte) (InputLayerIfc#(n_out_bytes)) 
+provisos (
+    Mul#(block_words, CoreWordBytes, n_out_bytes),
+    Add#(a__, 4, n_out_bytes), // n_out_bytes >= 4
+    Add#(b__, 32, TMul#(block_words, 32)), // block_words >= 1
+    Add#(c__, 32, TMul#(n_out_bytes, 8))
+);
+    //==== Registers ====//
+    Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
+    Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
+    Reg#(Bit#(TLog#(TAdd#(block_words, 1)))) counter <- mkReg(0);
+    // Reg#(Bool) isLast   <- mkRegU;
+    Reg#(Bool) closed   <- mkReg(False);
+    Reg#(Bool) needsPad <- mkReg(False); // only set with with closing word
     
-//     //===== Wires =====//
-//     Bool full = counter == fromInteger(valueOf(block_words));
-//     let do_deq <- mkPulseWireOR;
-//     let do_close <- mkPulseWireOR;
-//     let needs_pad_set <- mkPulseWireOR;
-//     let needs_pad_unset <- mkPulseWireOR;
-//     RWire#(Tuple2#(CoreWord, Bit#(CoreWordBytes))) enq_wire <- mkRWireSBR;
+    //===== Wires =====//
+    Bool full = counter == fromInteger(valueOf(block_words));
+    let do_deq <- mkPulseWireOR;
+    let do_close <- mkPulseWireOR;
+    // let needs_pad_set <- mkPulseWireOR;
+    // let needs_pad_unset <- mkPulseWireOR;
+    RWire#(Tuple2#(CoreWord, Bit#(CoreWordBytes))) enq_wire <- mkRWireSBR;
 
-//     (* fire_when_enabled *)
-//     rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
-//         case (enq_wire.wget) matches 
-//             tagged Valid .enqued: begin
-//                 match {.w, .v} = enqued;
-//                 if (counter == 0 || do_deq) begin
-//                     block <= unpack(zeroExtend(pack(w))); // do we need to zero fill the whole block?
-//                     valids <= unpack(zeroExtend(v));
-//                 end else begin
-//                     block[counter] <= w;
-//                     valids[counter] <= v;
-//                 end
-//                 closed <= do_close;
-//                 counter <= do_deq ? 1 : counter + 1;
-//             end
-//             tagged Invalid &&& do_deq: begin
-//                 closed <= False;
-//                 counter <= 0;
-//             end
-//         endcase
-//     endrule
+    let put_probe_data <- mkProbe();
+    let put_probe_valids <- mkProbe();
+    let put_probe_last <- mkProbe();
 
-//     (* fire_when_enabled *)
-//     rule rl_needspad if (needs_pad_set || needs_pad_unset);
-//         if (needs_pad_set)
-//             needsPad <= True;
-//         else
-//             needsPad <= False;
-//     endrule
+    (* fire_when_enabled *)
+    rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
+        case (enq_wire.wget) matches 
+            tagged Valid .enqued: begin
+                match {.w, .v} = enqued;
+                if (counter == 0 || do_deq) begin
+                    block <= unpack(zeroExtend(pack(w))); // do we need to zero fill the whole block?
+                    valids <= unpack(zeroExtend(v));
+                end else begin
+                    block[counter] <= w;
+                    valids[counter] <= v;
+                end
+                closed <= do_close;
+                counter <= do_deq ? 1 : counter + 1;
+            end
+            tagged Invalid &&& do_deq: begin
+                closed <= False;
+                counter <= 0;
+            end
+        endcase
+    endrule
 
-//     (* fire_when_enabled *)
-//     rule rl_pad if (!full && needsPad);
-//         enq_wire.wset(tuple2(unpack(zeroExtend(cipherPadByte)), 0));
-//         do_close.send();
-//         needs_pad_unset.send();
-//     endrule
+    // (* fire_when_enabled *)
+    // rule rl_needspad if (needs_pad_set || needs_pad_unset);
+    //     if (needs_pad_set)
+    //         needsPad <= True;
+    //     else
+    //         needsPad <= False;
+    // endrule
 
-//     //======================================== Interface ========================================//
-//     method Action put(i) if (((!closed && !full) || do_deq) && !needsPad);
-//         match {.padded, .paddedWord} = padWord(pack(word), padarg, cipherPadByte);
-//         enq_wire.wset(tuple2(pad ? unpack(paddedWord) : word, empty ? 0 : padargToValids(pad, padarg)));
-//         if (last) begin
-//             do_close.send();
-//             if (pad && !padded) needs_pad_set.send();
-//         end
-//     endmethod
+    (* fire_when_enabled *)
+    rule rl_pad if (!full && needsPad);
+        enq_wire.wset(tuple2(unpack(zeroExtend(cipherPadByte)), 0));
+        do_close.send();
+        // needs_pad_unset.send();
+        needsPad <= False;
+    endrule
 
-//     method ActionValue#(SipoIo#(n_out_bytes)) get if ((closed && !needsPad) || full);
-//         do_deq.send();
-//         return tuple2(unpack(pack(block)), unpack(pack(valids)));
-//     endmethod
-// endmodule
+    //======================================== Interface ========================================//
+    method Action put (CoreWord word, ValidBytes#(CoreWord) valid_bytes, Bool last) if (((!closed && !full) || do_deq) && !needsPad);
+        put_probe_data <= word;
+        put_probe_valids <= valid_bytes;
+        put_probe_last <= last;
+
+        let padded           = valid_bytes[3] == 0;
+        let empty            = valid_bytes[0] == 0;
+
+        let paddedWord = padInWord(pack(word), valid_bytes, cipherPadByte);
+        enq_wire.wset(tuple2(pack(paddedWord), valid_bytes));
+
+        // isLast <= last;
+        if (last) begin
+            do_close.send();
+            if (!padded)
+                needsPad <= True;
+                // needs_pad_set.send();
+        end
+    endmethod
+
+    method ActionValue#(InputBlock#(n_out_bytes)) get if ((closed && !needsPad) || full);
+        do_deq.send();
+        return InputBlock{data: unpack(pack(block)), valid_bytes: unpack(pack(valids)), last: closed && !needsPad };
+    endmethod
+endmodule
 
 endpackage

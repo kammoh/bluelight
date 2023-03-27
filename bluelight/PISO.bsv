@@ -1,60 +1,79 @@
 package PISO;
 
-import Vector         :: *;
-import CryptoCore     :: *;
-import BluelightUtils :: *;
+import Vector::*;
 
-interface PISO#(numeric type num_words, type w__);
-    method Action enq(Vector#(num_words, w__) data, Vector#(num_words, ValidBytes#(w__)) valids);
-    method Action deq;
-    (* always_ready *)
-    method Bool notEmpty;
-    (* always_ready *)
-    method w__ first;
-    (* always_ready *)
-    method Bool isLast;
+import CryptoCore::*;
+
+export Vector::*;
+export PISO :: *;
+
+typedef UInt#(TLog#(TAdd#(size,1))) CountType#(numeric type size);
+
+// similar to out-side of FIFOCountIfc + FIFO.enq
+interface PISO #(numeric type size, type el_type);
+  method Action enq(WithLast#(Vector#(size,el_type)) data_with_last, Vector#(size, Bool) guage);
+  method Action deq;
+  (* always_ready *)
+  method WithLast#(el_type) first;
+  (* always_ready *)
+  method Bool notEmpty;
 endinterface
 
-module mkPISO (PISO#(num_words, w__)) provisos (Bits#(w__, w_bits__), Mul#(w_bytes__, 8, w_bits__), 
-        Div#(w_bits__, 8, w_bytes__), Add#(1, b__, num_words));
+// Bypass PISO
+// if empty enq can happen simultanously with deq of first element 
+// module mkBypassPiso (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size));
+  // RWire#(Tuple2#(Vector#(size, el_type), CountType#(size))) rwEnq <- mkRWire();
+  // let pwDeq <- mkPulseWire();
+  // rule update if (isValid(rwEnq.wget) || pwDeq);
+  //   case (rwEnq.wget) matches
+  //     tagged Valid {.v, .n}:
+  //     begin
+  //       // if (pwDeq) // simultanous enq & deq when empty
+  //       // begin
+  //       //   vec <= shiftInAtN(v, vec[valueOf(size)-1]);
+  //       //   countReg <= n - 1;
+  //       // end
+  //       // else  // enq only
+  //       // begin
+  //         vec <= v;
+  //         countReg <= n;
+  //       // end
+  //     end
+  //     tagged Invalid: // deq only
+  //       if (pwDeq)
+  //       begin
+  //         vec <= shiftInAtN(vec, vec[valueOf(size)-1]);
+  //         countReg <= countReg - 1;
+  //       end
+  //     endcase
+  // endrule
 
-    let blockVec  <- mkRegU;
-    let validsVec <- mkReg(replicate(0));
-    let do_deq    <- mkPulseWire;
-    let enq_wire  <- mkRWireSBR;
 
-    let not_empty = unpack(lsb(validsVec[0]));
-    let last = not_empty && !unpack(lsb(validsVec[1]));
+// **** NO BYPASS
+// (* always_ready = "out.notEmpty,out.first" *)
+module mkPISO (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size), Add#(2,b__,size));
+  Reg#(Vector#(size, el_type)) vec <- mkRegU;
+  Reg#(Vector#(size, Bool)) filled <- mkReg(replicate(False)); // only lsb needs to be 0
+  Reg#(Bool) last_block <- mkRegU;
 
-    // =================================================== Rules =================================================== //
+  Bool not_empty = head(filled);
+  Bool empty = !not_empty;
 
-    (* fire_when_enabled *)
-    rule rl_enq_deq if (do_deq || isValid(enq_wire.wget));
-        case (enq_wire.wget) matches 
-            tagged Valid .enqued: begin
-                match {.b, .v} = enqued;
-                blockVec  <= b;
-                validsVec <= v;
-            end
-            tagged Invalid &&& do_deq: begin
-                blockVec <= shiftInAtN(blockVec, Vector::last(blockVec));
-                validsVec <= shiftInAtN(validsVec, 0);
-            end
-        endcase
-    endrule
+  method Action enq(WithLast#(Vector#(size,el_type)) data_with_last, Vector#(size, Bool) guage) if(empty);
+    vec <= data_with_last.data;
+    last_block <= data_with_last.last;
+    filled <= guage;
+  endmethod
 
-    // ================================================= Interface ================================================= //
+  method Action deq if (not_empty);
+    // vec <= shiftInAtN(vec, ?);
+    vec <= shiftInAtN(vec, last(vec));
+    filled <= shiftInAtN(filled, False);
+  endmethod
 
-    method Action enq(Vector#(num_words, w__) data, Vector#(num_words, ValidBytes#(w__)) valids)
-            if (!not_empty || (last && do_deq)) = enq_wire.wset(tuple2(data, valids));
+  method WithLast#(el_type) first = WithLast {data: head(vec), last: last_block && !filled[1]};
 
-    method Action deq if (not_empty) = do_deq.send();
-
-    method Bool notEmpty = not_empty;
-
-    method w__ first = padOutWord (blockVec[0], validsVec[0]);
-
-    method Bool isLast = last;
+  method Bool notEmpty = not_empty;
 
 endmodule : mkPISO
 
