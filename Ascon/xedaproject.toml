@@ -52,7 +52,7 @@ top = 'lwc'
 name = 'verilog'
 
 [design.rtl]
-# generator = "xeda run bsc --design-name Ascon"
+generator = "xeda run bsc --design-name Ascon"
 sources = [
     "gen_rtl/lwc.v",
 ]

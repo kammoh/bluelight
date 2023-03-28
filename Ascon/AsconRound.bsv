@@ -3,19 +3,29 @@ package AsconRound;
 import Vector :: *;
 import BluelightUtils :: *;
 
-typedef 12 PaRounds;
-typedef 6 PbRounds; // Ascon-128: 6, Ascon-128a: 8
-typedef 1 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1, Ascon-128a: 2
+
+
 typedef Bit#(64) AsconWord;
+typedef 12 PaRounds;
 typedef Vector#(5, AsconWord) AsconState; // S_r (rate)
 typedef Byte RoundConstant;
 
+`ifdef ASCON128A
+typedef 8 PbRounds; // Ascon-128: 6, Ascon-128a: 8
+typedef 2 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1, Ascon-128a: 2
+`else
+typedef 6 PbRounds; // Ascon-128: 6, Ascon-128a: 8
+typedef 1 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1, Ascon-128a: 2
+`endif
+
 // `define LUT_SUBS
 
+`ifndef UNROLL_FACTOR
+`define UNROLL_FACTOR 1
+`endif
 // Ascon-128: 1,2,3,6
 // Ascon-128a: 1,2,4
-// typedef 3 UnrollFactor;
-typedef 1 UnrollFactor;
+typedef `UNROLL_FACTOR UnrollFactor;
 
 function RoundConstant initRC(Bool pb);
     return pb ? (valueOf(PbRounds) == 8 ? 8'hb4 : 8'h96) : 8'hf0;
@@ -26,6 +36,22 @@ function RoundConstant nextRC(RoundConstant rc);
     return {tpl_1(s) - 1, tpl_2(s) + 1};
 endfunction
 
+
+instance Bitwise #(Vector#(n__, e__)) provisos (Bits#(e__, se__), Literal#(e__));
+    function Vector#(n__, e__) \& (Vector#(n__, e__) x1, Vector#(n__, e__) x2) = unpack(pack(x1) & pack(x2));
+    function Vector#(n__, e__) \| (Vector#(n__, e__) x1, Vector#(n__, e__) x2) = unpack(pack(x1) | pack(x2));
+    function Vector#(n__, e__) \^ (Vector#(n__, e__) x1, Vector#(n__, e__) x2) = unpack(pack(x1) ^ pack(x2));
+    function Vector#(n__, e__) \~^ (Vector#(n__, e__) x1, Vector#(n__, e__) x2) = unpack(pack(x1) ~^ pack(x2));
+    function Vector#(n__, e__) \^~ (Vector#(n__, e__) x1, Vector#(n__, e__) x2) = unpack(pack(x1) ^~ pack(x2));
+    function Vector#(n__, e__) invert (Vector#(n__, e__) x1) = unpack(~pack(x1));
+    function Vector#(n__, e__) \<< (Vector#(n__, e__) lhs, t__ rhs) provisos (PrimShiftIndex#(t__, a__)) =
+        shiftOutFromN(fromInteger(0), lhs, rhs);
+    function Vector#(n__, e__) \>> (Vector#(n__, e__) lhs, t__ rhs) provisos (PrimShiftIndex#(t__, a__)) =
+        shiftOutFrom0(fromInteger(0), lhs, rhs);
+    function Bit#(1) msb (Vector#(n__, e__) x) = msb(pack(x));
+    function Bit#(1) lsb (Vector#(n__, e__) x) = lsb(pack(x));
+endinstance
+
 function AsconState linearDiffusion(AsconState s);
     AsconState x = newVector;
     x[0] = s[0] ^ rotateRight(s[0], 19'b0) ^ rotateRight(s[0], 28'b0);
@@ -34,6 +60,11 @@ function AsconState linearDiffusion(AsconState s);
     x[3] = s[3] ^ rotateRight(s[3], 10'b0) ^ rotateRight(s[3], 17'b0);
     x[4] = s[4] ^ rotateRight(s[4],  7'b0) ^ rotateRight(s[4], 41'b0);
     return x;
+endfunction
+
+/// Same as Keccak S-Box
+function Vector#(5, Bit#(w__)) chi (Vector#(5, Bit#(w__)) s);
+    return s ^ rotate(~s & rotate(s)); // rotate right
 endfunction
 
 function AsconState substitution(AsconState s);
@@ -50,22 +81,24 @@ function AsconState substitution(AsconState s);
             x[j][i] = sout[4-j];
     end
 `else
-    AsconState t = newVector;
-    x = s;
-    x[0] = x[0] ^ x[4];
-    x[4] = x[4] ^ x[3];
-    x[2] = x[2] ^ x[1];
+    x[0] = s[0] ^ s[4];
+    x[1] = s[1];
+    x[2] = s[2] ^ s[1];
+    x[3] = s[3];
+    x[4] = s[4] ^ s[3];
+    // AsconState t = newVector;
     // start of keccak s-box
-    t[0] = ~x[0] & x[1];
-    t[1] = ~x[1] & x[2];
-    t[2] = ~x[2] & x[3];
-    t[3] = ~x[3] & x[4];
-    t[4] = ~x[4] & x[0];
-    x[0] = x[0] ^ t[1];
-    x[1] = x[1] ^ t[2];
-    x[2] = x[2] ^ t[3];
-    x[3] = x[3] ^ t[4];
-    x[4] = x[4] ^ t[0];
+    // t[0] = ~x[0] & x[1];
+    // t[1] = ~x[1] & x[2];
+    // t[2] = ~x[2] & x[3];
+    // t[3] = ~x[3] & x[4];
+    // t[4] = ~x[4] & x[0];
+    // x[0] = x[0] ^ t[1];
+    // x[1] = x[1] ^ t[2];
+    // x[2] = x[2] ^ t[3];
+    // x[3] = x[3] ^ t[4];
+    // x[4] = x[4] ^ t[0];
+    x = chi(x);
     // end of keccak s-box
     x[1] = x[1] ^ x[0];
     x[0] = x[0] ^ x[4];

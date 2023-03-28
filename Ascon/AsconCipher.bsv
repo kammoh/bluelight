@@ -1,19 +1,21 @@
 package AsconCipher;
 
 import Vector :: *;
+import Printf :: * ;
+
 import BluelightUtils :: *;
 import CryptoCore :: *;
 import AsconRound :: *;
 import LwcApi :: *;
 
-// function Action dump_state(String msg, AsconState s);
-//     action
-//         $write("%24.24s: ", msg);
-//         for (Integer i = 0; i < 5; i = i + 1)
-//             $write(" x%1.1d=%h", i, s[i]);
-//         $display("");
-//     endaction
-// endfunction
+function Action dump_state(String msg, AsconState s);
+    action
+        $write("%24.24s: ", msg);
+        for (Integer i = 0; i < 5; i = i + 1)
+            $write(" x%1.1d=%h", i, s[i]);
+        $display("");
+    endaction
+endfunction
 
 typedef enum {
     Idle,
@@ -70,6 +72,7 @@ typedef struct {
 } Flags deriving(Bits, Eq, FShow);
 
 module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
+    messageM(sprintf("\n\n*** Ascon  UnrollFactor=%d PaRounds=%d PbRounds=%d ***\n\n", valueOf(UnrollFactor), valueOf(PaRounds), valueOf(PbRounds)));
     Reg#(AsconState) asconState <- mkRegU;
     let state <- mkReg(Idle);
     Reg#(State) postPermuteState <- mkRegU;
