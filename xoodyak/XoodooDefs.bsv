@@ -23,7 +23,7 @@ typedef TDiv#(Xoodyak_Rkout, 4) MaxOutRateLanes;// 24 bytes
 typedef Vector #(NumLanesInPlane, XoodooLane) XoodooPlane;
 typedef Vector #(NumPlanes, XoodooPlane) XoodooState;
 
-// typedef Vector#(12, Vector#(4, Reg#(Byte))) XoodooStateReg;
+typedef Vector#(12, Vector#(4, Reg#(Byte))) XoodooStateReg;
 
 Bit#(10) roundConst[valueOf(XoodyakRounds)] = {'h058, 'h038, 'h3C0, 'h0D0, 'h120, 'h014, 'h060, 'h02C, 'h380, 'h0F0, 'h1A0, 'h012};
 
@@ -40,7 +40,7 @@ function Action dump_state(String msg, XoodooState state);
 endfunction
 
 function XoodooPlane shiftLeft(XoodooPlane plane, UInt#(2) t, UInt#(5) v);
-  for(Integer i=0; i < valueof(NumLanesInPlane); i = i + 1)
+  for(Integer i = 0; i < valueof(NumLanesInPlane); i = i + 1)
     plane[i] = rotateBitsBy(plane[i], v);
   return rotateBy(plane, t);
 endfunction
@@ -91,21 +91,21 @@ function XoodooState round2x(XoodooState prev_state, UInt#(TLog#(TDiv#(XoodyakRo
   return singleRound(singleRound(prev_state, consts[r][0]), consts[r][1]);
 endfunction
 
-// only 4 bits of the constants are used, others are zero
-function Bit#(4) udConstBits(Bool firstBlock, Bool lastBlock, SegmentType typ);
-  return case (typ)
-    Key:  4'h2;
-    Npub: 4'h3;
-    AD: {pack(lastBlock), 1'b0, pack(firstBlock),  pack(firstBlock)};
-      // case (tuple2(firstBlock,lastBlock)) matches
-      //   {True,  True}: 4'hb;
-      //   {False, True}: 4'h8;
-      //   {True, False}: 4'h3;
-      //   default:       4'h0;
-      // endcase
-    Plaintext, Ciphertext: (lastBlock ? 4'h4 : 0);
-    default: zeroExtend(pack(firstBlock)); // HashMessage: firstBlock ? 4'h1 : 0);
-  endcase;
-endfunction : udConstBits
+interface PermIfc;
+  method ActionValue#(XoodooState) state_out;
+  method Action state_in(XoodooState i, Bit#(10) rc);
+endinterface
+
+(* synthesize *)
+module mkPerm (PermIfc);
+  let permuted_state <- mkBypassWire();
+
+  method ActionValue#(XoodooState) state_out;
+    return permuted_state;
+  endmethod
+  method Action state_in(XoodooState i, Bit#(10) rc);
+    permuted_state <= singleRound(i, rc);
+  endmethod
+endmodule
 
 endpackage : XoodooDefs

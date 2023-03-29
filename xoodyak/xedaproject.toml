@@ -8,15 +8,15 @@ name = 'Xoodyak'
 
 [design.rtl]
 sources = [
-    '../bluelight/Bus/BusDefines.bsv',
-    '../bluelight/Bus/BusFIFO.bsv',
-    '../bluelight/Bus/Bus.bsv',
-    '../bluelight/CryptoCore.bsv',
-    '../bluelight/LwcApi.bsv',
+    'Bus/BusDefines.bsv',
+    'Bus/BusFIFO.bsv',
+    'Bus/Bus.bsv',
+    'CryptoCore.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',
     'Xoodyak.bsv',
+    'LwcApi.bsv',
     'XoodyakLwc.bsv',
 ]
 top = 'lwc'
@@ -36,34 +36,15 @@ clock_port = 'clk'
 
 [design.tb]
 sources = [
-    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_rtl/NIST_LWAPI_pkg.vhd",
-    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB_pkg.vhd",
-    "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB.vhd",
-    # "/nhome/LWC_Benchmarking/unrestricted/_orig_sources_/LWC/hardware/LWC_tb/LWC_TB_wrapper_conf.vhd",
+    "../LWC_tb/LWC_config_32.vhd",
+    "../LWC_tb/NIST_LWAPI_pkg.vhd",
+    "../LWC_tb/LWC_TB.vhd"
 ]
 top = "LWC_TB"
-# configuration_specification = "LWC_TB_wrapper_conf"
 
 
 [design.tb.generics]
-# G_FNAME_PDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/pdi.txt"
-# G_FNAME_SDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/sdi.txt"
-# G_FNAME_DO.file  = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/kats_for_verification/do.txt"
-G_FNAME_PDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/pdi.txt"
-G_FNAME_SDI.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/sdi.txt"
-G_FNAME_DO.file = "/nhome/LWC_Benchmarking/unrestricted/Xoodyak_R2_Xoodyak_Team/KAT_GMU/v1/generic_aead_sizes_new_key/do.txt"
-G_TEST_MODE = 0
-G_MAX_FAILURES = 1
 
-[flows.vivado_synth]
-# clock_period = 3.285
-clock_period = 3.38
-# clock_period = 5.0
-constrain_io = false
-optimize_power = false
-strategy = 'Timing'
-fmax_low_freq = 240
-fmax_high_freq = 320
 
 
 [[design]]
@@ -71,25 +52,17 @@ name = 'Xoodyak2x'
 
 [design.rtl]
 sources = [
-    '../bluelight/Bus/BusDefines.bsv',
-    '../bluelight/Bus/BusFIFO.bsv',
-    '../bluelight/Bus/Bus.bsv',
-    '../bluelight/CryptoCore.bsv',
-    '../bluelight/LwcApi.bsv',
+    'Bus/BusDefines.bsv',
+    'Bus/BusFIFO.bsv',
+    'Bus/Bus.bsv',
+    'CryptoCore.bsv',
     'XoodooDefs.bsv',
     'SIPO.bsv',
     'PISO.bsv',
     'Xoodyak2x.bsv',
+    'LwcApi.bsv',
     'XoodyakLwc.bsv',
 ]
 top = 'lwc'
 parameters.TOP_MODULE_NAME = 'lwc'
 parameters.UNROLLED = true
-
-[flows.vivado_sim]
-# vcd='debug.vcd'
-# stop_time='100us'
-
-[flows.diamond_synth]
-fmax_low_freq = 130
-fmax_high_freq = 180

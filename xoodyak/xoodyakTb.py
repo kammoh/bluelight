@@ -13,23 +13,26 @@ pprint = partial(pprint, sort_dicts=False)
 script_dir = os.path.realpath(os.path.dirname(
     inspect.getfile(inspect.currentframe())))
 
-seed = random.randrange(sys.maxsize)
-random = random.Random(seed)
-print("Python random seed is:", seed)
+# seed = random.randrange(sys.maxsize)
+# random = random.Random(seed)
+# print("Python random seed is:", seed)
 
 try:
-    from .pyxoodyak import Xoodyak, XoodyakCref
+    from .pyxoodyak import Xoodyak
+    from .pyxoodyak.xoodyak_cref import XoodyakCref
 except:
-    if script_dir not in sys.path:
-        sys.path.append(script_dir)
-    from pyxoodyak import Xoodyak, XoodyakCref
+    cocolight_dir = script_dir
+    if cocolight_dir not in sys.path:
+        sys.path.append(cocolight_dir)
+    from pyxoodyak import Xoodyak
+    from pyxoodyak.xoodyak_cref import XoodyakCref
 
 try:
     from .cocolight import *
 except:
     cocolight_dir = os.path.dirname(script_dir)
     if cocolight_dir not in sys.path:
-        sys.path.append(cocolight_dir)
+        sys.path.insert(0, cocolight_dir)
     from cocolight import *
 
 
@@ -147,13 +150,17 @@ async def debug_enc(dut: SimHandleBase):
 async def debug_dec(dut: SimHandleBase):
     debug = True
     max_stalls = 0
-    tb = XoodyakRefCheckerTb(
-        dut, debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
+    tb = LwcRefCheckerTb(
+        dut, ref=Xoodyak(debug=debug), debug=debug, max_in_stalls=max_stalls, max_out_stalls=max_stalls)
+
 
     await tb.start()
 
-    await tb.xdec_test(ad_size=45, ct_size=0)
+    await tb.xdec_test(ad_size=4, ct_size=4)
+    await tb.xdec_test(ad_size=2, ct_size=2)
+    await tb.xdec_test(ad_size=2, ct_size=0)
     await tb.xdec_test(ad_size=44, ct_size=0)
+    await tb.xdec_test(ad_size=45, ct_size=0)
     await tb.xdec_test(ad_size=0, ct_size=45)
     await tb.xdec_test(ad_size=65, ct_size=65)
 
@@ -174,10 +181,16 @@ async def debug_hash(dut: SimHandleBase):
 
     await tb.start()
 
-    # await tb.xhash_test(15)
-    # await tb.xhash_test(16)
+    await tb.xhash_test(1)
+    await tb.xhash_test(4)
+    await tb.xhash_test(15)
+    await tb.xhash_test(16)
+    await tb.xhash_test(16)
     await tb.xhash_test(32)
-    # await tb.xhash_test(99)
+    await tb.xhash_test(99)
+    await tb.xhash_test(2)
+    await tb.xhash_test(33)
+    await tb.xhash_test(3)
 
     await tb.launch_monitors()
     await tb.launch_drivers()

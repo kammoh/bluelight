@@ -10,97 +10,59 @@ interface SIPO #(numeric type size, type el_type);
   method Action enq(el_type in_data); 
   method Action deq;
   (* always_ready *)
-  method CountType#(size) count;
+  method Vector#(size, el_type) data;
+  (* always_ready *)
+  method Vector#(size, Bool) guage;
   (* always_ready *)
   method Bool isFull;
-  (* always_ready *)
-  method Bool notFull;
-  (* always_ready *)
-  method Vector#(size, el_type) data;
 endinterface
 
-// Pipelined SIPO (Serial In, Parallel Out)
-// When full, enq and deq can happen simultaneously
-module mkPipelineSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
+// SIPO (Serial In, Parallel Out)
+//    pipelined:   when full, enq can happen simultaneously with deq of first element
+(* default_clock_osc="clk" *)
+(* default_reset="rst" *)
+module mkSIPO#(Bool pipelined) (SIPO#(size, el_type)) provisos (Bits#(el_type, width),  Add#(1, a__, size));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
-  Reg#(CountType#(size)) count_reg <- mkReg(0);
-  RWire#(el_type) rwEnq <- mkRWire();
-  let pwDeq <- mkPulseWire();
+  Reg#(Vector#(size, Bool)) filled <- mkReg(replicate(False));
 
-  Bool full = count_reg == fromInteger(valueOf(size));
+  let do_enq <- mkPulseWire();
+  let do_deq <- mkPulseWire();
+
+  Bool full = last(filled);
+  Bool can_enq = pipelined ? (!full || do_deq) : !full;
   
   (* fire_when_enabled, no_implicit_conditions *)
-  rule update if (isValid(rwEnq.wget) || pwDeq);
-    case (rwEnq.wget) matches
-      tagged Valid .v:
-        begin
-          vec <= shiftInAtN(vec, v);
-          if (pwDeq) // simultaneous enq & deq
-            count_reg <= 1;
-          else // enq only
-            count_reg <= count_reg + 1;
-        end
-      tagged Invalid: // deq only
-        count_reg <= 0;
-    endcase
+  rule rl_update_counter if (do_enq || do_deq);
+    if (do_enq)
+      begin
+        if (pipelined)
+          begin
+            if (do_deq) // simultaneous enq & deq
+              filled <= shiftInAt0(replicate(False), True);
+            else // enq only
+              filled <= shiftInAt0(filled, True);
+          end
+        else
+          filled <= shiftInAt0(filled, True);
+      end
+    else // deq only
+      filled <= replicate(False);
   endrule
 
-  method Action enq(el_type el) if (!full || pwDeq);
-    rwEnq.wset(el);
+  method Action enq(el_type el) if (can_enq);
+    vec <= shiftInAtN(vec, el);
+    do_enq.send();
   endmethod
         
   method Action deq if (full);
-    pwDeq.send();
+    do_deq.send();
   endmethod
 
-  method Vector#(size, el_type) data;
-    return vec;
-  endmethod
+  method Vector#(size, el_type) data = vec;
 
-  method CountType#(size) count;
-    return count_reg;
-  endmethod
+  method Vector#(size, Bool) guage = filled;
 
-  method Bool isFull;
-    return full;
-  endmethod
-
-  method Bool notFull;
-    return !full;
-  endmethod
-endmodule : mkPipelineSIPO
-
-
-module mkSIPO (SIPO#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
-  Reg#(Vector#(size, el_type)) vec <- mkRegU;
-  Reg#(CountType#(size)) count_reg <- mkReg(0);
-
-  Bool full = count_reg == fromInteger(valueOf(size));
-
-  method Action enq(el_type v) if (!full);
-    vec <= shiftInAtN(vec, v);
-    count_reg <= count_reg + 1;
-  endmethod
-        
-  method Action deq if (full);
-    count_reg <= 0;
-  endmethod
-
-  method Vector#(size, el_type) data;
-    return vec;
-  endmethod
-
-  method CountType#(size) count;
-    return count_reg;
-  endmethod
-
-  method Bool isFull;
-    return full;
-  endmethod
-
-  method Bool notFull;
-    return !full;
-  endmethod
+  method Bool isFull = full;
 
 endmodule : mkSIPO
 
@@ -113,7 +75,7 @@ interface MyShiftReg #(numeric type size, type el_type);
   method Vector#(size, el_type) data;
 endinterface
 
-module mkMyShiftReg (MyShiftReg#(size, el_type)) provisos (Bits#(el_type, el_type_sz));
+module mkMyShiftReg (MyShiftReg#(size, el_type)) provisos (Bits#(el_type, width));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
 
   method Action enq(el_type v);
@@ -123,42 +85,5 @@ module mkMyShiftReg (MyShiftReg#(size, el_type)) provisos (Bits#(el_type, el_typ
     return vec;
   endmethod
 endmodule : mkMyShiftReg
-
-// with set-one
-interface MyShiftRegWSO #(numeric type size, type el_type);
-  (* always_ready *)
-  method Action enq(el_type in_data); 
-  (* always_ready *)
-  method Action setOne; // has priority over enq
-  (* always_ready *)
-  method Vector#(size, el_type) data;
-endinterface
-
-module mkMyShiftRegWSO (MyShiftRegWSO#(size, el_type)) provisos (Bits#(el_type, el_type_sz), PrimUpdateable#(el_type, a__), SizedLiteral#(a__, 1));
-  Reg#(Vector#(size, el_type)) vec <- mkRegU;
-
-  let doSetOne <- mkPulseWire;
-  let enqData <- mkRWire;
-
-  (* fire_when_enabled, no_implicit_conditions *)
-  rule rl_update_vec;
-    if (doSetOne) // setOne has priority over enq
-      vec[0][0] <= 1'b1;
-    else if (enqData.wget matches tagged Valid .v)
-      vec <= shiftInAtN(vec, v);
-  endrule
-
-  method Action setOne;
-    doSetOne.send;
-  endmethod
-
-  method Action enq(el_type v);
-    enqData.wset(v);
-  endmethod
-
-  method Vector#(size, el_type) data;
-    return vec;
-  endmethod
-endmodule : mkMyShiftRegWSO
 
 endpackage : SIPO

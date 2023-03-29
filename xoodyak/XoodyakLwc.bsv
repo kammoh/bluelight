@@ -12,10 +12,13 @@ import Xoodyak :: *;
 `endif
 
 (* default_clock_osc = "clk",
-   default_reset = "rst" *)
-module `TOP_MODULE_NAME (LwcIfc);
+   default_reset = "rst", synthesize *)
+module `TOP_MODULE_NAME (LwcIfc#(32));
+  Integer key_bytes = 16;
+  Integer abytes = 16;
+  Integer hash_bytes = 32;
   let xoodyak <- mkXoodyak;
-  let lwc <- mkLwc(xoodyak, True, False);
+  let lwc <- mkLwc(xoodyak, True, key_bytes, abytes, hash_bytes);
   return lwc;
 endmodule
 
