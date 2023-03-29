@@ -129,8 +129,8 @@ module lwc(clk,
        lwc_sdiReceiver_fifof_rv_EN_port1__write;
 
   // register ascon_bdiFlags
-  reg [6 : 0] ascon_bdiFlags;
-  wire [6 : 0] ascon_bdiFlags_D_IN;
+  reg [7 : 0] ascon_bdiFlags;
+  wire [7 : 0] ascon_bdiFlags_D_IN;
   wire ascon_bdiFlags_EN;
 
   // register ascon_cipher_asconState
@@ -244,6 +244,10 @@ module lwc(clk,
   // register lwc_inSegLast
   reg lwc_inSegLast;
   wire lwc_inSegLast_D_IN, lwc_inSegLast_EN;
+
+  // register lwc_newKey
+  reg lwc_newKey;
+  wire lwc_newKey_D_IN, lwc_newKey_EN;
 
   // register lwc_op_decrypt
   reg lwc_op_decrypt;
@@ -387,59 +391,61 @@ module lwc(clk,
   wire [319 : 0] IF_ascon_cipher_loadNonceCounter_59_THEN_ascon_ETC___d187;
   wire [191 : 0] IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d207,
 		 ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d51;
-  wire [63 : 0] IF_NOT_ascon_bdiFlags_56_BIT_5_89_10_OR_NOT_as_ETC___d268,
-		IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d206,
+  wire [63 : 0] IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d206,
 		IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d209,
-		IF_ascon_bdiFlags_56_BIT_5_89_AND_ascon_cipher_ETC___d201,
+		IF_ascon_bdiFlags_56_BIT_5_10_THEN_ascon_ciphe_ETC___d265,
+		IF_ascon_bdiFlags_56_BIT_6_89_AND_ascon_cipher_ETC___d201,
 		IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d192,
-		IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318,
+		IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312,
 		ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29,
-		ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d32,
 		ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6,
-		ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d57,
 		ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8,
-		x__h1202,
-		x__h1204,
-		x__h5121,
-		x__h5123,
-		x__h5276,
-		x__h5278,
-		x__h5380,
-		x__h5382,
-		x__h5535,
-		x__h5537,
-		y__h1203,
-		y__h1205,
-		y__h5122,
-		y__h5124,
-		y__h5277,
-		y__h5279,
-		y__h5381,
-		y__h5383,
-		y__h5536,
-		y__h5538;
-  wire [55 : 0] IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256,
-		IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d255,
-		ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232;
-  wire [39 : 0] IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d248;
+		x__h1283,
+		x__h1285,
+		x__h3264,
+		x__h6420,
+		x__h6422,
+		x__h6459,
+		x__h6602,
+		x__h6604,
+		x__h6731,
+		x__h6733,
+		x__h6776,
+		x__h6919,
+		x__h6921,
+		y__h1284,
+		y__h1286,
+		y__h6421,
+		y__h6423,
+		y__h6460,
+		y__h6603,
+		y__h6605,
+		y__h6732,
+		y__h6734,
+		y__h6777,
+		y__h6920,
+		y__h6922;
+  wire [55 : 0] IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253,
+		IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d252,
+		ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229;
+  wire [39 : 0] IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d245;
   wire [31 : 0] lwc_headersFifo_rv_BITS_31_TO_0__q4,
 		lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1,
-		sw__h44277,
-		x__h41677;
-  wire [23 : 0] IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d241;
-  wire [13 : 0] x__h48017;
-  wire [7 : 0] IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d219,
-	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d217,
-	       b__h45450,
-	       b__h46634,
-	       b__h46746,
-	       b__h46858,
-	       spliced_bits__h2050;
-  wire [3 : 0] a__h41055, oh__h40994, valid_bytes__h40266;
-  wire [1 : 0] x__h7578;
-  wire NOT_IF_lwc_tagFifo_rv_port0__read__71_BIT_32_7_ETC___d607,
-       NOT_ascon_cipher_first_block_88_11_AND_NOT_asc_ETC___d277,
-       NOT_lwc_outCounter_75_BITS_13_TO_1_08_EQ_0_09__ETC___d627,
+		sw__h48648,
+		x__h46044;
+  wire [23 : 0] IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d238;
+  wire [13 : 0] x__h52388;
+  wire [7 : 0] IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d216,
+	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214,
+	       b__h49821,
+	       b__h51005,
+	       b__h51117,
+	       b__h51229,
+	       spliced_bits__h3276;
+  wire [3 : 0] a__h45422, oh__h45361, valid_bytes__h44633;
+  wire [1 : 0] x__h9003;
+  wire NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605,
+       NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625,
        _dand2ascon_inLayer_do_close_EN_wset,
        ascon_outLayer_validsVec_29_BITS_3_TO_0_33_EQ__ETC___d152;
 
@@ -571,14 +577,14 @@ module lwc(clk,
 	     WILL_FIRE_RL_lwc_pdi_instruction &&
 	     !lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] ;
   assign MUX_ascon_cipher_loadNonceCounter_write_1__SEL_1 =
-	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[6] ;
+	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[7] ;
   assign MUX_ascon_cipher_state_write_1__SEL_2 =
 	     ascon_cipher_state == 3'd3 &&
 	     ascon_cipher_roundCounter == 4'd11 ;
   assign MUX_ascon_cipher_state_write_1__SEL_3 =
 	     WILL_FIRE_RL_ascon_rl_get_inlayer &&
-	     (!ascon_bdiFlags[5] && !ascon_bdiFlags[6] ||
-	      NOT_ascon_cipher_first_block_88_11_AND_NOT_asc_ETC___d277) ;
+	     (!ascon_bdiFlags[5] && !ascon_bdiFlags[7] ||
+	      ascon_cipher_loadNonceCounter && ascon_bdiFlags[7]) ;
   assign MUX_ascon_cipher_state_write_1__SEL_4 =
 	     WILL_FIRE_RL_ascon_rl_squeeze_tag_or_digest &&
 	     (ascon_cipher_squeezeCounter[0] || ascon_cipher_squeezeHash) ;
@@ -589,11 +595,11 @@ module lwc(clk,
 	     (lwc_pdiCounter[13:1] == 13'd0 && !lwc_inFlags[8] &&
 	      lwc_inSegEoT &&
 	      !lwc_pdiCounter[0] &&
-	      valid_bytes__h40266[3] ||
+	      valid_bytes__h44633[3] ||
 	      lwc_finalRemainBytes == 2'd0 && lwc_pdiCounter[13:1] == 13'd0 &&
 	      !lwc_inFlags[8] &&
 	      lwc_inSegEoT &&
-	      valid_bytes__h40266[3]) ;
+	      valid_bytes__h44633[3]) ;
   assign MUX_ascon_outLayer_enq_wire_wset_1__SEL_1 =
 	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[3] ;
   assign MUX_lwc_headersFifo_rv_port1__write_1__SEL_1 =
@@ -608,7 +614,7 @@ module lwc(clk,
 	      !lwc_headersFifo_rv_BITS_31_TO_0__q4[31]) ;
   assign MUX_lwc_outCounter_write_1__SEL_2 =
 	     WILL_FIRE_RL_lwc_sendout_data &&
-	     NOT_lwc_outCounter_75_BITS_13_TO_1_08_EQ_0_09__ETC___d627 ;
+	     NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625 ;
   assign MUX_lwc_outState_write_1__SEL_1 =
 	     WILL_FIRE_RL_lwc_verify_tag && lwc_outCounter[13:1] == 13'd0 ;
   assign MUX_lwc_outState_write_1__SEL_2 =
@@ -634,19 +640,19 @@ module lwc(clk,
 	     lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] ;
   assign MUX_lwc_statFailure_write_1__SEL_1 =
 	     WILL_FIRE_RL_lwc_verify_tag &&
-	     NOT_IF_lwc_tagFifo_rv_port0__read__71_BIT_32_7_ETC___d607 ;
+	     NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605 ;
   assign MUX_ascon_cipher_asconState_write_1__VAL_2 =
 	     { ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d51,
-	       x__h5380 ^ y__h5381,
-	       x__h5535 ^ y__h5536 } ;
+	       x__h6731 ^ y__h6732,
+	       x__h6919 ^ y__h6920 } ;
   assign MUX_ascon_cipher_asconState_write_1__VAL_3 =
-	     ascon_bdiFlags[6] ?
+	     ascon_bdiFlags[7] ?
 	       IF_ascon_cipher_loadNonceCounter_59_THEN_ascon_ETC___d187 :
 	       { IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d207,
 		 IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d209,
-		 IF_NOT_ascon_bdiFlags_56_BIT_5_89_10_OR_NOT_as_ETC___d268 } ;
+		 IF_ascon_bdiFlags_56_BIT_5_10_THEN_ascon_ciphe_ETC___d265 } ;
   assign MUX_ascon_cipher_first_block_write_1__VAL_2 =
-	     ascon_bdiFlags[6] ||
+	     ascon_bdiFlags[7] ||
 	     !ascon_inLayer_needsPad && ascon_inLayer_closed ;
   assign MUX_ascon_cipher_loadNonceCounter_write_1__VAL_1 =
 	     ascon_cipher_loadNonceCounter + 1'd1 ;
@@ -675,7 +681,9 @@ module lwc(clk,
   assign MUX_ascon_cipher_squeezeCounter_write_1__VAL_2 =
 	     ascon_cipher_squeezeCounter + 2'd1 ;
   assign MUX_ascon_cipher_state_write_1__VAL_1 =
-	     lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[29] ? 3'd1 : 3'd3 ;
+	     lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[29] ?
+	       (lwc_newKey ? 3'd1 : 3'd2) :
+	       3'd3 ;
   assign MUX_ascon_cipher_state_write_1__VAL_4 =
 	     (!ascon_cipher_squeezeHash && ascon_cipher_squeezeCounter[0] ||
 	      ascon_cipher_squeezeCounter[0] &&
@@ -683,24 +691,24 @@ module lwc(clk,
 	       3'd0 :
 	       3'd3 ;
   assign MUX_ascon_inLayer_enq_wire_wset_1__VAL_1 =
-	     { x__h41677, valid_bytes__h40266 } ;
+	     { x__h46044, valid_bytes__h44633 } ;
   assign MUX_ascon_outLayer_enq_wire_wset_1__VAL_1 =
-	     { ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232,
-	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d217,
+	     { ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229,
+	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214,
 	       ascon_inLayer_valids } ;
   assign MUX_ascon_outLayer_enq_wire_wset_1__VAL_2 =
-	     { IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[7:0],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[15:8],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[23:16],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[31:24],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[39:32],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[47:40],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[55:48],
-	       IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318[63:56],
+	     { IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[7:0],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[15:8],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[23:16],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[31:24],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[39:32],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[47:40],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[55:48],
+	       IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312[63:56],
 	       8'd255 } ;
   assign MUX_lwc_doSender_data_reg_write_1__VAL_1 =
 	     { 1'd0, lwc_headersFifo_rv[31:0] } ;
-  assign MUX_lwc_doSender_data_reg_write_1__VAL_2 = { 1'd0, sw__h44277 } ;
+  assign MUX_lwc_doSender_data_reg_write_1__VAL_2 = { 1'd0, sw__h48648 } ;
   assign MUX_lwc_doSender_data_reg_write_1__VAL_3 =
 	     { 4'd15, lwc_statFailure, 28'b0 } ;
   assign MUX_lwc_headersFifo_rv_port1__write_1__VAL_1 =
@@ -721,7 +729,7 @@ module lwc(clk,
 	     (lwc_outCounter[13:1] == 13'd0 && !lwc_outCounter[0] ||
 	      lwc_outRemainder == 2'd0 && lwc_outCounter[13:1] == 13'd0) ?
 	       14'd4 :
-	       x__h48017 ;
+	       x__h52388 ;
   assign MUX_lwc_outState_write_1__VAL_2 =
 	     lwc_outSegLast ? (lwc_outSegPt ? 2'd2 : 2'd3) : 2'd0 ;
   assign MUX_lwc_outState_write_1__VAL_3 =
@@ -850,6 +858,7 @@ module lwc(clk,
   // register ascon_bdiFlags
   assign ascon_bdiFlags_D_IN =
 	     { lwc_inFlags[8:7],
+	       lwc_inFlags[1] && lwc_inFlags[7],
 	       lwc_inFlags[4:2],
 	       !lwc_inFlags[8] && !lwc_inFlags[7],
 	       !lwc_inFlags[8] && !lwc_inFlags[2] } ;
@@ -905,7 +914,7 @@ module lwc(clk,
 	     MUX_ascon_cipher_loadNonceCounter_write_1__SEL_1 &&
 	     MUX_ascon_cipher_loadNonceCounter_write_1__VAL_1 ;
   assign ascon_cipher_loadNonceCounter_EN =
-	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[6] ||
+	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[7] ||
 	     WILL_FIRE_RL_lwc_pdi_instruction &&
 	     !lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] ;
 
@@ -1034,8 +1043,8 @@ module lwc(clk,
 	     ascon_cipher_state == 3'd3 &&
 	     ascon_cipher_roundCounter == 4'd11 ||
 	     WILL_FIRE_RL_ascon_rl_get_inlayer &&
-	     (!ascon_bdiFlags[5] && !ascon_bdiFlags[6] ||
-	      NOT_ascon_cipher_first_block_88_11_AND_NOT_asc_ETC___d277) ||
+	     (!ascon_bdiFlags[5] && !ascon_bdiFlags[7] ||
+	      ascon_cipher_loadNonceCounter && ascon_bdiFlags[7]) ||
 	     WILL_FIRE_RL_ascon_rl_squeeze_tag_or_digest &&
 	     (ascon_cipher_squeezeCounter[0] || ascon_cipher_squeezeHash) ||
 	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 32'd0 ;
@@ -1060,7 +1069,7 @@ module lwc(clk,
 
   // register ascon_inLayer_counter
   assign ascon_inLayer_counter_D_IN =
-	     ascon_inLayer_enq_wire_whas ? x__h7578 : 2'd0 ;
+	     ascon_inLayer_enq_wire_whas ? x__h9003 : 2'd0 ;
   assign ascon_inLayer_counter_EN = WILL_FIRE_RL_ascon_inLayer_rl_enq_deq ;
 
   // register ascon_inLayer_needsPad
@@ -1166,6 +1175,10 @@ module lwc(clk,
   assign lwc_inSegLast_D_IN = lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[24] ;
   assign lwc_inSegLast_EN = WILL_FIRE_RL_lwc_get_pdi_header ;
 
+  // register lwc_newKey
+  assign lwc_newKey_D_IN = lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] ;
+  assign lwc_newKey_EN = WILL_FIRE_RL_lwc_pdi_instruction ;
+
   // register lwc_op_decrypt
   assign lwc_op_decrypt_D_IN =
 	     !lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] &&
@@ -1177,14 +1190,14 @@ module lwc(clk,
 	  MUX_lwc_outCounter_write_1__VAL_1 or
 	  MUX_lwc_outCounter_write_1__SEL_2 or
 	  MUX_lwc_outCounter_write_1__VAL_2 or
-	  WILL_FIRE_RL_lwc_verify_tag or x__h48017)
+	  WILL_FIRE_RL_lwc_verify_tag or x__h52388)
   begin
     case (1'b1) // synopsys parallel_case
       MUX_lwc_outCounter_write_1__SEL_1:
 	  lwc_outCounter_D_IN = MUX_lwc_outCounter_write_1__VAL_1;
       MUX_lwc_outCounter_write_1__SEL_2:
 	  lwc_outCounter_D_IN = MUX_lwc_outCounter_write_1__VAL_2;
-      WILL_FIRE_RL_lwc_verify_tag: lwc_outCounter_D_IN = x__h48017;
+      WILL_FIRE_RL_lwc_verify_tag: lwc_outCounter_D_IN = x__h52388;
       default: lwc_outCounter_D_IN =
 		   14'bxxxxxxxxxxxxxx /* unspecified value */ ;
     endcase
@@ -1195,7 +1208,7 @@ module lwc(clk,
 	      !lwc_headersFifo_rv_BITS_31_TO_0__q4[28] &&
 	      !lwc_headersFifo_rv_BITS_31_TO_0__q4[31]) ||
 	     WILL_FIRE_RL_lwc_sendout_data &&
-	     NOT_lwc_outCounter_75_BITS_13_TO_1_08_EQ_0_09__ETC___d627 ||
+	     NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625 ||
 	     WILL_FIRE_RL_lwc_verify_tag ;
 
   // register lwc_outRemainder
@@ -1333,7 +1346,7 @@ module lwc(clk,
   assign lwc_statFailure_D_IN = MUX_lwc_statFailure_write_1__SEL_1 ;
   assign lwc_statFailure_EN =
 	     WILL_FIRE_RL_lwc_verify_tag &&
-	     NOT_IF_lwc_tagFifo_rv_port0__read__71_BIT_32_7_ETC___d607 ||
+	     NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605 ||
 	     WILL_FIRE_RL_lwc_out_header ;
 
   // register lwc_tagFifo_rv
@@ -1341,18 +1354,6 @@ module lwc(clk,
   assign lwc_tagFifo_rv_EN = 1'b1 ;
 
   // remaining internal signals
-  assign IF_NOT_ascon_bdiFlags_56_BIT_5_89_10_OR_NOT_as_ETC___d268 =
-	     (!ascon_bdiFlags[5] || !ascon_cipher_first_block ||
-	      ascon_inLayer_valids[0]) ?
-	       { IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d219,
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[7:0],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[15:8],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[23:16],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[31:24],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[39:32],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[47:40],
-		 IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256[55:48] } :
-	       ascon_cipher_asconState[63:0] ;
   assign IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d206 =
 	     (!ascon_inLayer_needsPad && ascon_inLayer_closed &&
 	      ascon_bdiFlags[3]) ?
@@ -1366,23 +1367,34 @@ module lwc(clk,
 	       ascon_cipher_asconState[127:64] ^
 	       { ascon_cipher_keyStore[31:0], ascon_cipher_keyStore[63:32] } :
 	       ascon_cipher_asconState[127:64] ;
-  assign IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d219 =
+  assign IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d216 =
 	     ascon_bdiFlags[4] ?
 	       (ascon_inLayer_valids[0] ?
 		  ascon_inLayer_block[7:0] :
-		  ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d217) :
-	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d217 ;
-  assign IF_ascon_bdiFlags_56_BIT_4_15_THEN_IF_ascon_in_ETC___d256 =
+		  ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214) :
+	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214 ;
+  assign IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253 =
 	     ascon_bdiFlags[4] ?
-	       IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d255 :
-	       ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232 ;
-  assign IF_ascon_bdiFlags_56_BIT_5_89_AND_ascon_cipher_ETC___d201 =
-	     (ascon_bdiFlags[5] && ascon_cipher_first_block) ?
+	       IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d252 :
+	       ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229 ;
+  assign IF_ascon_bdiFlags_56_BIT_5_10_THEN_ascon_ciphe_ETC___d265 =
+	     ascon_bdiFlags[5] ?
+	       ascon_cipher_asconState[63:0] :
+	       { IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d216,
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[7:0],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[15:8],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[23:16],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[31:24],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[39:32],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[47:40],
+		 IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d253[55:48] } ;
+  assign IF_ascon_bdiFlags_56_BIT_6_89_AND_ascon_cipher_ETC___d201 =
+	     (ascon_bdiFlags[6] && ascon_cipher_first_block) ?
 	       ascon_cipher_asconState[255:192] ^
 	       { ascon_cipher_keyStore[31:0], ascon_cipher_keyStore[63:32] } :
 	       ascon_cipher_asconState[255:192] ;
   assign IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d192 =
-	     (ascon_cipher_first_block && ascon_bdiFlags[5]) ?
+	     (ascon_cipher_first_block && ascon_bdiFlags[6]) ?
 	       ascon_cipher_asconState[319:256] ^
 	       { ascon_cipher_keyStore[95:64],
 		 ascon_cipher_keyStore[127:96] } :
@@ -1391,7 +1403,7 @@ module lwc(clk,
 	     { IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d192[63:1],
 	       IF_ascon_cipher_first_block_88_AND_ascon_bdiFl_ETC___d192[0] ^
 	       (ascon_bdiFlags[3] && ascon_cipher_first_block),
-	       IF_ascon_bdiFlags_56_BIT_5_89_AND_ascon_cipher_ETC___d201,
+	       IF_ascon_bdiFlags_56_BIT_6_89_AND_ascon_cipher_ETC___d201,
 	       IF_NOT_ascon_inLayer_needsPad_17_38_AND_ascon__ETC___d206 } ;
   assign IF_ascon_cipher_loadNonceCounter_59_THEN_ascon_ETC___d187 =
 	     ascon_cipher_loadNonceCounter ?
@@ -1419,44 +1431,40 @@ module lwc(clk,
 		 ascon_inLayer_block[55:48],
 		 ascon_inLayer_block[63:56],
 		 ascon_cipher_asconState[191:0] } ;
-  assign IF_ascon_cipher_squeezeHash_04_THEN_ascon_ciph_ETC___d318 =
+  assign IF_ascon_cipher_squeezeHash_98_THEN_ascon_ciph_ETC___d312 =
 	     ascon_cipher_squeezeHash ?
 	       ascon_cipher_asconState[63:0] :
 	       CASE_IF_ascon_cipher_squeezeCounter_BIT_0_THEN_ETC__q2 ^
 	       CASE_ascon_cipher_squeezeCounter_BIT_0_0_ascon_ETC__q3 ;
-  assign IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d241 =
+  assign IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d238 =
 	     { ascon_inLayer_valids[7] ?
 		 ascon_inLayer_block[63:56] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[55:48],
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[55:48],
 	       ascon_inLayer_valids[6] ?
 		 ascon_inLayer_block[55:48] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[47:40],
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[47:40],
 	       ascon_inLayer_valids[5] ?
 		 ascon_inLayer_block[47:40] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[39:32] } ;
-  assign IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d248 =
-	     { IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d241,
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[39:32] } ;
+  assign IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d245 =
+	     { IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d238,
 	       ascon_inLayer_valids[4] ?
 		 ascon_inLayer_block[39:32] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[31:24],
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[31:24],
 	       ascon_inLayer_valids[3] ?
 		 ascon_inLayer_block[31:24] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[23:16] } ;
-  assign IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d255 =
-	     { IF_ascon_inLayer_valids_09_BIT_7_20_THEN_ascon_ETC___d248,
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[23:16] } ;
+  assign IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d252 =
+	     { IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d245,
 	       ascon_inLayer_valids[2] ?
 		 ascon_inLayer_block[23:16] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[15:8],
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[15:8],
 	       ascon_inLayer_valids[1] ?
 		 ascon_inLayer_block[15:8] :
-		 ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232[7:0] } ;
-  assign NOT_IF_lwc_tagFifo_rv_port0__read__71_BIT_32_7_ETC___d607 =
-	     lwc_tagFifo_rv[31:0] != sw__h44277 ;
-  assign NOT_ascon_cipher_first_block_88_11_AND_NOT_asc_ETC___d277 =
-	     !ascon_cipher_first_block && !ascon_bdiFlags[6] ||
-	     ascon_inLayer_valids[0] && !ascon_bdiFlags[6] ||
-	     ascon_cipher_loadNonceCounter && ascon_bdiFlags[6] ;
-  assign NOT_lwc_outCounter_75_BITS_13_TO_1_08_EQ_0_09__ETC___d627 =
+		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[7:0] } ;
+  assign NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605 =
+	     lwc_tagFifo_rv[31:0] != sw__h48648 ;
+  assign NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625 =
 	     lwc_outCounter[13:1] != 13'd0 ||
 	     lwc_outRemainder != 2'd0 && lwc_outCounter[0] ||
 	     lwc_outSegPt && lwc_outSegLast ;
@@ -1468,29 +1476,20 @@ module lwc(clk,
 	      lwc_finalRemainBytes == 2'd0 && lwc_pdiCounter[13:1] == 13'd0 &&
 	      !lwc_inFlags[8] &&
 	      lwc_inSegEoT) ;
-  assign a__h41055 = oh__h40994 - 4'd1 ;
+  assign a__h45422 = oh__h45361 - 4'd1 ;
   assign ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 =
-	     { ascon_cipher_asconState[191:136], spliced_bits__h2050 } ^
-	     ascon_cipher_asconState[127:64] ;
-  assign ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d32 =
-	     ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 ^
-	     ~ascon_cipher_asconState[255:192] &
-	     ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 ;
+	     x__h3264 ^ ascon_cipher_asconState[127:64] ;
   assign ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d51 =
-	     { x__h1202 ^ y__h1203,
-	       x__h5121 ^ y__h5122,
-	       x__h5276 ^ y__h5277 } ;
+	     { x__h1283 ^ y__h1284,
+	       x__h6420 ^ y__h6421,
+	       x__h6602 ^ y__h6603 } ;
   assign ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 =
 	     ascon_cipher_asconState[319:256] ^
 	     ascon_cipher_asconState[255:192] ;
-  assign ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d57 =
-	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 ^
-	     ~ascon_cipher_asconState[127:64] &
-	     ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 ;
   assign ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 =
 	     ascon_cipher_asconState[63:0] ^
 	     ascon_cipher_asconState[319:256] ;
-  assign ascon_inLayer_block_01_BITS_63_TO_8_21_XOR_asc_ETC___d232 =
+  assign ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229 =
 	     ascon_inLayer_block[63:8] ^
 	     { ascon_cipher_asconState[7:0],
 	       ascon_cipher_asconState[15:8],
@@ -1499,7 +1498,7 @@ module lwc(clk,
 	       ascon_cipher_asconState[39:32],
 	       ascon_cipher_asconState[47:40],
 	       ascon_cipher_asconState[55:48] } ;
-  assign ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d217 =
+  assign ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214 =
 	     ascon_inLayer_block[7:0] ^ ascon_cipher_asconState[63:56] ;
   assign ascon_outLayer_validsVec_29_BITS_3_TO_0_33_EQ__ETC___d152 =
 	     ascon_outLayer_validsVec[3:0] == 4'd0 &&
@@ -1515,111 +1514,118 @@ module lwc(clk,
 	     !ascon_inLayer_needsPad &&
 	     ascon_inLayer_closed &&
 	     ascon_outLayer_do_deq_whas ;
-  assign b__h45450 =
+  assign b__h49821 =
 	     ascon_outLayer_validsVec[3] ?
 	       ascon_outLayer_blockVec[31:24] :
 	       8'd0 ;
-  assign b__h46634 =
+  assign b__h51005 =
 	     ascon_outLayer_validsVec[2] ?
 	       ascon_outLayer_blockVec[23:16] :
 	       8'd0 ;
-  assign b__h46746 =
+  assign b__h51117 =
 	     ascon_outLayer_validsVec[1] ?
 	       ascon_outLayer_blockVec[15:8] :
 	       8'd0 ;
-  assign b__h46858 =
+  assign b__h51229 =
 	     ascon_outLayer_validsVec[0] ?
 	       ascon_outLayer_blockVec[7:0] :
 	       8'd0 ;
   assign lwc_headersFifo_rv_BITS_31_TO_0__q4 = lwc_headersFifo_rv[31:0] ;
   assign lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1 =
 	     lwc_pdiReceiver_fifof_rv[31:0] ;
-  assign oh__h40994 =
+  assign oh__h45361 =
 	     { lwc_finalRemainBytes == 2'd3,
 	       lwc_finalRemainBytes == 2'd2,
 	       lwc_finalRemainBytes == 2'd1,
 	       lwc_finalRemainBytes == 2'd0 } ;
-  assign spliced_bits__h2050 =
+  assign spliced_bits__h3276 =
 	     ascon_cipher_asconState[135:128] ^ ascon_cipher_roundConstant ;
-  assign sw__h44277 =
+  assign sw__h48648 =
 	     { (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[0] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h46858 :
+		 b__h51229 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[1] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h46746 :
+		 b__h51117 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[2] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h46634 :
+		 b__h51005 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[3] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h45450 :
+		 b__h49821 :
 		 8'd0 } ;
-  assign valid_bytes__h40266 =
+  assign valid_bytes__h44633 =
 	     (lwc_pdiCounter[13:1] != 13'd0 || !lwc_inSegEoT ||
 	      lwc_pdiCounter[0] ||
 	      lwc_finalRemainBytes == 2'd0) ?
 	       4'd15 :
-	       a__h41055 ;
-  assign x__h1202 = x__h1204 ^ y__h1205 ;
-  assign x__h1204 =
+	       a__h45422 ;
+  assign x__h1283 = x__h1285 ^ y__h1286 ;
+  assign x__h1285 =
 	     ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 ^
 	     ~ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 &
 	     ascon_cipher_asconState[127:64] ;
-  assign x__h41677 =
-	     { valid_bytes__h40266[3] ?
+  assign x__h3264 =
+	     { ascon_cipher_asconState[191:136], spliced_bits__h3276 } ;
+  assign x__h46044 =
+	     { valid_bytes__h44633[3] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[7:0] :
-		 (valid_bytes__h40266[2] ? 8'h80 : 8'd0),
-	       valid_bytes__h40266[2] ?
+		 (valid_bytes__h44633[2] ? 8'h80 : 8'd0),
+	       valid_bytes__h44633[2] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[15:8] :
-		 (valid_bytes__h40266[1] ? 8'h80 : 8'd0),
-	       valid_bytes__h40266[1] ?
+		 (valid_bytes__h44633[1] ? 8'h80 : 8'd0),
+	       valid_bytes__h44633[1] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[23:16] :
-		 (valid_bytes__h40266[0] ? 8'h80 : 8'd0),
-	       valid_bytes__h40266[0] ?
+		 (valid_bytes__h44633[0] ? 8'h80 : 8'd0),
+	       valid_bytes__h44633[0] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[31:24] :
 		 8'h80 } ;
-  assign x__h48017 = lwc_outCounter - 14'd1 ;
-  assign x__h5121 = x__h5123 ^ y__h5124 ;
-  assign x__h5123 =
+  assign x__h52388 = lwc_outCounter - 14'd1 ;
+  assign x__h6420 = x__h6422 ^ y__h6423 ;
+  assign x__h6422 = x__h6459 ^ y__h6460 ;
+  assign x__h6459 =
 	     ascon_cipher_asconState[255:192] ^
 	     ~ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 &
-	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 ^
-	     ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d32 ;
-  assign x__h5276 = x__h5278 ^ y__h5279 ;
-  assign x__h5278 =
-	     ~ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d32 ;
-  assign x__h5380 = x__h5382 ^ y__h5383 ;
-  assign x__h5382 =
+	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 ;
+  assign x__h6602 = x__h6604 ^ y__h6605 ;
+  assign x__h6604 = ~y__h6460 ;
+  assign x__h6731 = x__h6733 ^ y__h6734 ;
+  assign x__h6733 = x__h6776 ^ y__h6777 ;
+  assign x__h6776 =
 	     ascon_cipher_asconState[127:64] ^
 	     ~ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 &
-	     ascon_cipher_asconState[255:192] ^
-	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d57 ;
-  assign x__h5535 = x__h5537 ^ y__h5538 ;
-  assign x__h5537 =
-	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d57 ^
-	     x__h1204 ;
-  assign x__h7578 =
+	     ascon_cipher_asconState[255:192] ;
+  assign x__h6919 = x__h6921 ^ y__h6922 ;
+  assign x__h6921 = y__h6777 ^ x__h1285 ;
+  assign x__h9003 =
 	     WILL_FIRE_RL_ascon_rl_get_inlayer ?
 	       2'd1 :
 	       ascon_inLayer_counter + 2'd1 ;
-  assign y__h1203 = { x__h1204[40:0], x__h1204[63:41] } ;
-  assign y__h1205 = { x__h1204[6:0], x__h1204[63:7] } ;
-  assign y__h5122 = { x__h5123[16:0], x__h5123[63:17] } ;
-  assign y__h5124 = { x__h5123[9:0], x__h5123[63:10] } ;
-  assign y__h5277 = { x__h5278[5:0], x__h5278[63:6] } ;
-  assign y__h5279 = { x__h5278[0], x__h5278[63:1] } ;
-  assign y__h5381 = { x__h5382[38:0], x__h5382[63:39] } ;
-  assign y__h5383 = { x__h5382[60:0], x__h5382[63:61] } ;
-  assign y__h5536 = { x__h5537[27:0], x__h5537[63:28] } ;
-  assign y__h5538 = { x__h5537[18:0], x__h5537[63:19] } ;
+  assign y__h1284 = { x__h1285[40:0], x__h1285[63:41] } ;
+  assign y__h1286 = { x__h1285[6:0], x__h1285[63:7] } ;
+  assign y__h6421 = { x__h6422[16:0], x__h6422[63:17] } ;
+  assign y__h6423 = { x__h6422[9:0], x__h6422[63:10] } ;
+  assign y__h6460 =
+	     ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 ^
+	     ~ascon_cipher_asconState[255:192] &
+	     ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 ;
+  assign y__h6603 = { x__h6604[5:0], x__h6604[63:6] } ;
+  assign y__h6605 = { x__h6604[0], x__h6604[63:1] } ;
+  assign y__h6732 = { x__h6733[38:0], x__h6733[63:39] } ;
+  assign y__h6734 = { x__h6733[60:0], x__h6733[63:61] } ;
+  assign y__h6777 =
+	     ascon_cipher_asconState_BITS_63_TO_0_XOR_ascon_ETC___d8 ^
+	     ~ascon_cipher_asconState[127:64] &
+	     ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 ;
+  assign y__h6920 = { x__h6921[27:0], x__h6921[63:28] } ;
+  assign y__h6922 = { x__h6921[18:0], x__h6921[63:19] } ;
   always@(ascon_cipher_squeezeCounter or ascon_cipher_asconState)
   begin
     case (ascon_cipher_squeezeCounter[0] ? 32'd4 : 32'd3)
@@ -1764,6 +1770,7 @@ module lwc(clk,
       lwc_inSegEoT <= `BSV_ASSIGNMENT_DELAY lwc_inSegEoT_D_IN;
     if (lwc_inSegLast_EN)
       lwc_inSegLast <= `BSV_ASSIGNMENT_DELAY lwc_inSegLast_D_IN;
+    if (lwc_newKey_EN) lwc_newKey <= `BSV_ASSIGNMENT_DELAY lwc_newKey_D_IN;
     if (lwc_op_decrypt_EN)
       lwc_op_decrypt <= `BSV_ASSIGNMENT_DELAY lwc_op_decrypt_D_IN;
     if (lwc_outCounter_EN)
@@ -1787,7 +1794,7 @@ module lwc(clk,
   `else // not BSV_NO_INITIAL_BLOCKS
   initial
   begin
-    ascon_bdiFlags = 7'h2A;
+    ascon_bdiFlags = 8'hAA;
     ascon_cipher_asconState =
 	320'hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA;
     ascon_cipher_first_block = 1'h0;
@@ -1813,6 +1820,7 @@ module lwc(clk,
     lwc_inFlags = 9'h0AA;
     lwc_inSegEoT = 1'h0;
     lwc_inSegLast = 1'h0;
+    lwc_newKey = 1'h0;
     lwc_op_decrypt = 1'h0;
     lwc_outCounter = 14'h2AAA;
     lwc_outRemainder = 2'h2;

@@ -56,7 +56,7 @@ interface CipherIfc#(numeric type n_bytes, type flags_type);
     method Action loadKey (CoreWord word, Bool last);
 
     // block in/out
-    method ActionValue#(BlockOfSize#(n_bytes)) absorb(BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, Bool last, flags_type flags); 
+    method ActionValue#(BlockOfSize#(n_bytes)) absorb (BlockOfSize#(n_bytes) block, ByteValidsOfSize#(n_bytes) valids, Bool last, flags_type flags); 
     // block out
     method ActionValue#(BlockOfSize#(8)) squeeze;
 endinterface
@@ -64,6 +64,7 @@ endinterface
 typedef struct {
     Bool npub;         // nonce public
     Bool ad;           // associated data
+    Bool emptyAD;      // empty associated data
     Bool ct;           // ciphertext
     Bool ptct;         // PT or CT
     Bool hm;           // hash message
@@ -71,8 +72,8 @@ typedef struct {
     Bool ptCtAd;       // PT or CT or AD
 } Flags deriving(Bits, Eq, FShow);
 
-module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
-    messageM(sprintf("\n\n*** Ascon  UnrollFactor=%d PaRounds=%d PbRounds=%d ***\n\n", valueOf(UnrollFactor), valueOf(PaRounds), valueOf(PbRounds)));
+module mkAsconCipher #(parameter Bool ascon128a) (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor, pa_cycles, PaRounds), Mul#(UnrollFactor, pb_cycles, PbRounds));
+    messageM(sprintf("\n\n*** Ascon-%s UnrollFactor=%d PaRounds=%d PbRounds=%d ***\n\n", ascon128a ? "128A" : "128", valueOf(UnrollFactor), valueOf(PaRounds), valueOf(PbRounds)));
     Reg#(AsconState) asconState <- mkRegU;
     let state <- mkReg(Idle);
     Reg#(State) postPermuteState <- mkRegU;
@@ -124,7 +125,7 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
             asconState <= unpack(pack(zeroExtend(getIV(True))));
             roundConstant <= initRC(False);
         end
-        state <= op.hash ? Permute : op.new_key ? LoadKey : LoadKey;
+        state <= op.hash ? Permute : op.new_key ? LoadKey : Absorb;
         postPermuteState <= Absorb;
         roundCounter <= 0;
         loadNonceCounter <= 0;
@@ -152,28 +153,24 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
             first_block <= False;
         
         // TODO move to flags:
-        let emptyAD = flags.ad && first_block && !valids[0];
         let firstAD = flags.ad && first_block;
         let firstPtCt = flags.ptct && first_block;
         let lastPtCt = flags.ptct && last;
         let lastPtCtHash = last && flags.ptCtHm;
         let pb = flags.ptCtAd && !(flags.ptct && last);
 
-        if (!emptyAD)
-            absorbedState[0] = bytesToWord(flags.ct ? ctBlock : xoredBlock); // FIXME
+        if (!flags.emptyAD)
+            for (Integer i = 0; i < rateWords; i = i + 1)
+                absorbedState[i] = bytesToWord(flags.ct ? takeAt(i*8, ctBlock) : takeAt(i*8, xoredBlock)); // FIXME
 
         if (lastPtCt) begin
-            // for (Integer i = 0; i < 2; i = i + 1)
-            //     absorbedState[rateWords + i] = asconState[rateWords + i] ^ storedKey[i];
-            absorbedState[1] = asconState[1] ^ storedKey[0];
-            absorbedState[2] = asconState[2] ^ storedKey[1];
+            for (Integer i = 0; i < 2; i = i + 1)
+                absorbedState[rateWords + i] = asconState[rateWords + i] ^ storedKey[i];
         end
 
         if (firstAD) begin
-            // for (Integer i = 0; i < 2; i = i + 1)
-            //     absorbedState[3+i] = asconState[3+i] ^ storedKey[i];
-            absorbedState[3] = asconState[3] ^ storedKey[0];
-            absorbedState[4] = asconState[4] ^ storedKey[1];
+            for (Integer i = 0; i < 2; i = i + 1)
+                absorbedState[3+i] = asconState[3+i] ^ storedKey[i];
         end
 
         absorbedState[4][0] = absorbedState[4][0] ^ pack(firstPtCt); // last bit of state
@@ -184,10 +181,10 @@ module mkAsconCipher (CipherIfc#(BlockBytes, Flags)) provisos (Mul#(UnrollFactor
                 asconState <= keyNonceInit(block, storedKey);
                 state <= Permute;
             end else
-                asconState[3] <= bytesToWord(block); // Npub_0
+                asconState[3] <= bytesToWord(take(block)); // Npub_0
         end else begin
             asconState <= absorbedState;
-            if (!emptyAD)
+            if (!flags.emptyAD)
                 state <= Permute;
         end
         roundConstant <= initRC(pb);

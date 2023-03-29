@@ -1,9 +1,9 @@
 package AsconRound;
 
 import Vector :: *;
+import BuildVector :: * ;
+
 import BluelightUtils :: *;
-
-
 
 typedef Bit#(64) AsconWord;
 typedef 12 PaRounds;
@@ -12,10 +12,10 @@ typedef Byte RoundConstant;
 
 `ifdef ASCON128A
 typedef 8 PbRounds; // Ascon-128: 6, Ascon-128a: 8
-typedef 2 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1, Ascon-128a: 2
+typedef 2 RateWords; // Ascon-128a: 2
 `else
 typedef 6 PbRounds; // Ascon-128: 6, Ascon-128a: 8
-typedef 1 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1, Ascon-128a: 2
+typedef 1 RateWords; // Ascon-128/Ascon-Hash/Ascon-XOF: 1
 `endif
 
 // `define LUT_SUBS
@@ -68,8 +68,8 @@ function Vector#(5, Bit#(w__)) chi (Vector#(5, Bit#(w__)) s);
 endfunction
 
 function AsconState substitution(AsconState s);
-    AsconState x = newVector;
 `ifdef LUT_SUBS
+    AsconState x = newVector;
     Bit#(5) sbox[32] = {5'h4,  5'hb, 5'h1f, 5'h14, 5'h1a, 5'h15,  5'h9,  5'h2, 5'h1b, 5'h5, 5'h8, 5'h12, 5'h1d, 5'h3, 5'h6, 5'h1c, 
                        5'h1e, 5'h13,  5'h7,  5'he,  5'h0,  5'hd, 5'h11, 5'h18, 5'h10, 5'hc, 5'h1, 5'h19, 5'h16, 5'ha, 5'hf, 5'h17};
     for (Integer i = 0; i < 64; i = i + 1) begin
@@ -80,12 +80,13 @@ function AsconState substitution(AsconState s);
         for (Integer j = 0; j < 5; j = j + 1)
             x[j][i] = sout[4-j];
     end
+    return x;
 `else
-    x[0] = s[0] ^ s[4];
-    x[1] = s[1];
-    x[2] = s[2] ^ s[1];
-    x[3] = s[3];
-    x[4] = s[4] ^ s[3];
+    // x[0] = s[0] ^ s[4];
+    // x[1] = s[1];
+    // x[2] = s[2] ^ s[1];
+    // x[3] = s[3];
+    // x[4] = s[4] ^ s[3];
     // AsconState t = newVector;
     // start of keccak s-box
     // t[0] = ~x[0] & x[1];
@@ -98,14 +99,10 @@ function AsconState substitution(AsconState s);
     // x[2] = x[2] ^ t[3];
     // x[3] = x[3] ^ t[4];
     // x[4] = x[4] ^ t[0];
-    x = chi(x);
+    let x = chi(vec(s[0] ^ s[4], s[1], s[2] ^ s[1], s[3], s[4] ^ s[3]));
     // end of keccak s-box
-    x[1] = x[1] ^ x[0];
-    x[0] = x[0] ^ x[4];
-    x[3] = x[3] ^ x[2];
-    x[2] = ~x[2];
+    return vec(x[0] ^ x[4], x[1] ^ x[0], ~x[2], x[3] ^ x[2], x[4]);
 `endif
-    return x;
 endfunction
 
 function Tuple2#(AsconState,RoundConstant) permutation(AsconState s, RoundConstant rc);

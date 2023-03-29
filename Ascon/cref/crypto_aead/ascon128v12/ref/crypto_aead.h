@@ -14,5 +14,4 @@
             const unsigned char *ad,unsigned long long adlen,
             const unsigned char *npub,
             const unsigned char *k
-            );
-        
+        );

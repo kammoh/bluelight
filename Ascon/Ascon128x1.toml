@@ -9,7 +9,7 @@ top = "lwc"
 clock.port = "clk"
 
 [tb]
-sources = ["asconTb.py"]
+sources = ["ascon128_tb.py"]
 cocotb = true
 
 # sources = [
@@ -20,6 +20,6 @@ cocotb = true
 
 [lwc]
 aead.algorithm = 'ascon128v12'
-aead.key_reuse = false
+aead.key_reuse = true
 hash.algorithm =  'asconhashv12'
 block_bits = { AD = 64, PT = 64, HM = 64 }

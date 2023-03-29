@@ -1,0 +1,25 @@
+name = 'Ascon-128a_x1'
+
+[rtl]
+generator = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=1 rtl.parameters.ASCON128A=1 --settings verilog_out_dir=${design_root}/gen_rtl/ax1"
+sources = [
+    "gen_rtl/ax1/lwc.v",
+]
+top = "lwc"
+clock.port = "clk"
+
+[tb]
+sources = ["ascon128a_tb.py"]
+cocotb = true
+
+# sources = [
+#     "../../LWC/hardware/LWC_config_32.vhd",
+#     "../../LWC/hardware/LWC_rtl/NIST_LWAPI_pkg.vhd",
+#     "../../LWC/hardware/LWC_tb/LWC_TB.vhd",
+# ]
+
+[lwc]
+aead.algorithm = 'ascon128av12'
+aead.key_reuse = true
+hash.algorithm =  'asconhashav12'
+block_bits = { AD = 64, PT = 64, HM = 64 }
