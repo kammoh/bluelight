@@ -1,4 +1,4 @@
-name = 'Ascon-128_x1'
+name = 'Ascon-128_x2'
 
 [rtl]
 generator = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=2 --settings verilog_out_dir=${design_root}/gen_rtl/x2"
