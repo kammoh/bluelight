@@ -64,6 +64,7 @@ function XoodooState iota(XoodooState a, Bit#(10) rconst);
   return a;
 endfunction
 
+/// Same as Keccak and Ascon S-Box
 function XoodooState chi(XoodooState a);
   for(Integer y = 0 ; y < valueOf(NumPlanes) ; y = y + 1)
     a[y] = unpack(pack(a[y]) ^ (~pack(a[ (y+1)%3 ]) & pack(a[ (y+2)%3 ])));

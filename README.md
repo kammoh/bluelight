@@ -11,7 +11,7 @@ Compliant with [LWC Hardware API](https://cryptography.gmu.edu/athena/LWC/LWC_HW
 
 - CryptoCore implementations:
   - [Ascon](Ascon)
-    - Ascon-128, Ascon-128a AEAD and Hash
+    - Ascon-128 (WIP: Ascon-128a) AEAD and Hash
     - parameterized: unroll factor
     - fastest available FPGA implementation
     - winner of NIST LWC selection process

@@ -82,25 +82,7 @@ function AsconState substitution(AsconState s);
     end
     return x;
 `else
-    // x[0] = s[0] ^ s[4];
-    // x[1] = s[1];
-    // x[2] = s[2] ^ s[1];
-    // x[3] = s[3];
-    // x[4] = s[4] ^ s[3];
-    // AsconState t = newVector;
-    // start of keccak s-box
-    // t[0] = ~x[0] & x[1];
-    // t[1] = ~x[1] & x[2];
-    // t[2] = ~x[2] & x[3];
-    // t[3] = ~x[3] & x[4];
-    // t[4] = ~x[4] & x[0];
-    // x[0] = x[0] ^ t[1];
-    // x[1] = x[1] ^ t[2];
-    // x[2] = x[2] ^ t[3];
-    // x[3] = x[3] ^ t[4];
-    // x[4] = x[4] ^ t[0];
     let x = chi(vec(s[0] ^ s[4], s[1], s[2] ^ s[1], s[3], s[4] ^ s[3]));
-    // end of keccak s-box
     return vec(x[0] ^ x[4], x[1] ^ x[0], ~x[2], x[3] ^ x[2], x[4]);
 `endif
 endfunction
