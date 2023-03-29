@@ -1,5 +1,6 @@
 import importlib
 import importlib.util
+import re
 from cffi import FFI
 import inspect
 import os
@@ -8,7 +9,8 @@ import sys
 from pathlib import Path
 from typeguard import typechecked
 from typeguard.importhook import install_import_hook
-install_import_hook('lwc_api')
+
+install_import_hook("lwc_api")
 
 
 # Proposed Python LWC API
@@ -25,12 +27,12 @@ class LwcAead:
 
     @typechecked
     def encrypt(self, pt: bytes, ad: bytes, npub: bytes, key: bytes) -> Tuple[bytes, tag_type]:
-        """ returns ct, tag """
+        """returns ct, tag"""
         ...
 
     @typechecked
     def decrypt(self, ct: bytes, ad: bytes, npub: bytes, key: bytes, tag: tag_type) -> bytes:
-        """ returns pt if tag matches o/w None """
+        """returns pt if tag matches o/w None"""
         ...
 
 
@@ -42,8 +44,7 @@ class LwcHash:
         ...
 
 
-SCRIPT_DIR = os.path.realpath(os.path.dirname(
-    inspect.getfile(inspect.currentframe())))
+SCRIPT_DIR = os.path.realpath(os.path.dirname(inspect.getfile(inspect.currentframe())))
 
 
 DEBUG_LEVEL = 0
@@ -54,8 +55,9 @@ def mylog(*args, **kwargs):
         print(*args, **kwargs)
 
 
-class LwcCffi():
+class LwcCffi:
     """Python wrapper of C implementations, provides mechanism for building cpython native libs"""
+
     aead_algorithm = None
     hash_algorithm = None
     root_cref_dir = None
@@ -66,9 +68,16 @@ class LwcCffi():
     CRYPTO_ABYTES = None
     CRYPTO_HASH_BYTES = None
 
-    def build_cffi(self, root_cref_dir: Path, algorithms: Dict[str, str], cffi_build_dir:str, DEBUG_LEVEL: int = 0):
+    def build_cffi(
+        self,
+        root_cref_dir: Path,
+        algorithms: Dict[str, str],
+        cffi_build_dir: str,
+        DEBUG_LEVEL: int = 0,
+    ):
         assert root_cref_dir
-        headers = dict(aead='''
+        headers = dict(
+            aead="""
         int crypto_aead_encrypt(
             unsigned char *c, unsigned long long *clen,
             const unsigned char *m, unsigned long long mlen,
@@ -84,7 +93,12 @@ class LwcCffi():
             const unsigned char *ad,unsigned long long adlen,
             const unsigned char *npub,
             const unsigned char *k
-        );\n''', hash='int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);\n')
+        );\n""",
+            hash="int crypto_hash(unsigned char *out, const unsigned char *in, unsigned long long hlen);\n",
+        )
+
+        comments_pat = re.compile(r"(\/\*.*\*\/)*(\/\/.*)?")
+        define_pat = re.compile(r"\#define\s+(\w+)\s+(\d+)")
 
         for op, algorithm in algorithms.items():
             if algorithm is None:
@@ -92,32 +106,41 @@ class LwcCffi():
             header = headers[op]
             print(header)
             ffibuilder = FFI()
-            cref_dir = root_cref_dir / f'crypto_{op}' / algorithm / 'ref'
+            cref_dir = root_cref_dir / f"crypto_{op}" / algorithm / "ref"
             hdr_file = cref_dir / f"crypto_{op}.h"
             if not hdr_file.exists():
-                with open(hdr_file, 'w') as f:
+                with open(hdr_file, "w") as f:
                     f.write(header)
             api_h = cref_dir / f"api.h"
             if api_h.exists():
+                header += "\n"
                 with open(api_h) as f:
-                    header += '\n' + f.read()
+                    for line in f.readlines():
+                        line = re.sub(comments_pat, "", line)
+                        line = line.strip()
+                        m = define_pat.match(line)
+                        if m:
+                            header += line + "\n"
 
             ffibuilder.cdef(header)
             define_macros = []
             if DEBUG_LEVEL:
-                define_macros.append(('VERBOSE_LEVEL', DEBUG_LEVEL))
-            ffibuilder.set_source(f"cffi_{algorithm}_{op}",
-                                  header,
-                                  libraries=[],
-                                  sources=[str(s)
-                                           for s in cref_dir.glob("*.c")],
-                                  include_dirs=[cref_dir],
-                                  define_macros=define_macros
-                                  )
-            ffibuilder.compile(tmpdir=cffi_build_dir,
-                               verbose=1, target=None, debug=None)
+                define_macros.append(("DEBUG", DEBUG_LEVEL))
+                define_macros.append(("ASCON_PRINT_STATE", 1))
+                define_macros.append(("VERBOSE_LEVEL", DEBUG_LEVEL))
+            ffibuilder.set_source(
+                f"cffi_{algorithm}_{op}",
+                header,
+                libraries=[],
+                sources=[str(s) for s in cref_dir.glob("*.c")],
+                include_dirs=[cref_dir],
+                define_macros=define_macros,
+            )
+            ffibuilder.compile(tmpdir=cffi_build_dir, verbose=1, target=None, debug=None)
 
-    def __init__(self, cffi_build_dir='cffi_build', force_recompile=False, DEBUG_LEVEL=DEBUG_LEVEL) -> None:
+    def __init__(
+        self, cffi_build_dir="cffi_build", force_recompile=False, DEBUG_LEVEL=DEBUG_LEVEL
+    ) -> None:
         assert self.aead_algorithm
         assert self.root_cref_dir
 
@@ -125,12 +148,11 @@ class LwcCffi():
         # sys.path.append(os.path.join(SCRIPT_DIR, cffi_build_dir))
         # print(f'adding {os.path.join(SCRIPT_DIR, cffi_build_dir)} to sys.path')
         sys.path.append(os.path.join(os.getcwd(), cffi_build_dir))
-        print(
-            f'adding {os.path.join(os.getcwd(), cffi_build_dir)} to sys.path')
+        print(f"adding {os.path.join(os.getcwd(), cffi_build_dir)} to sys.path")
 
         def try_imports():
             # from cffi_xoodyakv1_aead import ffi as aead_ffi, lib as aead_lib
-            spec = importlib.util.find_spec(f'cffi_{self.aead_algorithm}_aead')
+            spec = importlib.util.find_spec(f"cffi_{self.aead_algorithm}_aead")
             if not spec:
                 raise ModuleNotFoundError
             aead_module = spec.loader.load_module()
@@ -142,7 +164,7 @@ class LwcCffi():
             assert self.aead_ffi
 
             if self.hash_algorithm:
-                spec = importlib.util.find_spec(f'cffi_{self.hash_algorithm}_hash')
+                spec = importlib.util.find_spec(f"cffi_{self.hash_algorithm}_hash")
                 if not spec:
                     raise ModuleNotFoundError
                 hash_module = spec.loader.load_module()
@@ -157,19 +179,21 @@ class LwcCffi():
                 raise ModuleNotFoundError
             try_imports()
         except ModuleNotFoundError as e:
-            mylog('Need to build the library...')
-            self.build_cffi(self.root_cref_dir, dict(aead=self.aead_algorithm, hash=self.hash_algorithm),
-                            self.cffi_build_dir, DEBUG_LEVEL=DEBUG_LEVEL)
+            mylog("Need to build the library...")
+            self.build_cffi(
+                self.root_cref_dir,
+                dict(aead=self.aead_algorithm, hash=self.hash_algorithm),
+                self.cffi_build_dir,
+                DEBUG_LEVEL=DEBUG_LEVEL,
+            )
             importlib.invalidate_caches()
             sys.path.append(os.path.join(os.getcwd(), self.cffi_build_dir))
-            print(
-                f'adding {os.path.join(os.getcwd(), self.cffi_build_dir)} to sys.path')
+            print(f"adding {os.path.join(os.getcwd(), self.cffi_build_dir)} to sys.path")
 
             try:
                 try_imports()
             except ModuleNotFoundError as e:
-                print(
-                    "You probably just need to run Python again. [Hopefully will be fixed soon] ")
+                print("You probably just need to run Python again. [Hopefully will be fixed soon] ")
                 raise e
 
         self.CRYPTO_KEYBYTES = self.aead_lib.CRYPTO_KEYBYTES
@@ -181,18 +205,19 @@ class LwcCffi():
 
     @typechecked
     def encrypt(self, pt: bytes, ad: bytes, npub: bytes, key: bytes) -> Tuple[bytes, tag_type]:
-        """ returns tag, ct """
+        """returns tag, ct"""
         assert len(key) == self.aead_lib.CRYPTO_KEYBYTES
         assert len(npub) == self.aead_lib.CRYPTO_NPUBBYTES
         ct = bytes(len(pt) + self.aead_lib.CRYPTO_ABYTES)
-        ct_len = self.aead_ffi.new('unsigned long long*')
+        ct_len = self.aead_ffi.new("unsigned long long*")
 
-        ret = self.aead_lib.crypto_aead_encrypt(ct, ct_len, pt, len(
-            pt), ad, len(ad), self.aead_ffi.NULL, npub, key)
+        ret = self.aead_lib.crypto_aead_encrypt(
+            ct, ct_len, pt, len(pt), ad, len(ad), self.aead_ffi.NULL, npub, key
+        )
         assert ret == 0
         assert ct_len[0] == len(ct)
-        tag = ct[-self.CRYPTO_ABYTES:]
-        ct = ct[:-self.CRYPTO_ABYTES]
+        tag = ct[-self.CRYPTO_ABYTES :]
+        ct = ct[: -self.CRYPTO_ABYTES]
         return ct, tag
 
     @typechecked
@@ -201,12 +226,20 @@ class LwcCffi():
         assert len(key) == self.aead_lib.CRYPTO_KEYBYTES
         assert len(npub) == self.aead_lib.CRYPTO_NPUBBYTES
         pt = bytes(ct_len)
-        assert len(
-            tag) == self.CRYPTO_ABYTES, f"Tag should be {self.CRYPTO_ABYTES} bytes"
-        pt_len = self.aead_ffi.new('unsigned long long*')
+        assert len(tag) == self.CRYPTO_ABYTES, f"Tag should be {self.CRYPTO_ABYTES} bytes"
+        pt_len = self.aead_ffi.new("unsigned long long*")
         ct_tag = self.aead_ffi.from_buffer(ct + tag)
         ret = self.aead_lib.crypto_aead_decrypt(
-            pt, pt_len, self.aead_ffi.NULL, ct_tag, ct_len + self.CRYPTO_ABYTES, ad, len(ad), npub, key)
+            pt,
+            pt_len,
+            self.aead_ffi.NULL,
+            ct_tag,
+            ct_len + self.CRYPTO_ABYTES,
+            ad,
+            len(ad),
+            npub,
+            key,
+        )
         assert (ret != 0 and pt_len[0] == 0) or pt_len[0] == ct_len
 
         return pt if ret == 0 else None
