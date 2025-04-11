@@ -76,15 +76,15 @@ module mkAsconCipher #(parameter Bool ascon128a) (CipherIfc#(BlockBytes, Flags))
     messageM(sprintf("\n\n*** Ascon-%s UnrollFactor=%d PaRounds=%d PbRounds=%d ***\n\n", ascon128a ? "128A" : "128", valueOf(UnrollFactor), valueOf(PaRounds), valueOf(PbRounds)));
     Reg#(AsconState) asconState <- mkRegU;
     let state <- mkReg(Idle);
-    Reg#(State) postPermuteState <- mkRegU;
+    let postPermuteState <- mkReg(Absorb);
 
     Reg#(Vector#(NumKeyWords, CoreWord)) keyStore <- mkRegU;
-    Reg#(Bit#(TLog#(pa_cycles))) roundCounter <- mkRegU;
-    Reg#(RoundConstant) roundConstant <- mkRegU;
-    Reg#(Bit#(2)) squeezeCounter <- mkRegU; // 2 bits if supports hash, o/w 1 bit
-    Reg#(Bit#(TLog#(TDiv#(NonceBits, TMul#(BlockBytes, 8))))) loadNonceCounter <- mkRegU;
-    Reg#(Bool) squeezeHash <- mkRegU;
-    Reg#(Bool) first_block <- mkRegU; // first block of a type
+    Reg#(Bit#(TLog#(pa_cycles))) roundCounter <- mkReg(0);
+    Reg#(RoundConstant) roundConstant <- mkReg(0);
+    Reg#(Bit#(2)) squeezeCounter <- mkReg(0); // 2 bits if supports hash, o/w 1 bit
+    Reg#(Bit#(TLog#(TDiv#(NonceBits, TMul#(BlockBytes, 8))))) loadNonceCounter <- mkReg(0);
+    Reg#(Bool) squeezeHash <- mkReg(False);
+    Reg#(Bool) first_block <- mkReg(False); // first block of a type
 
     Vector#(2, AsconWord) storedKey = reverse(unpack(pack(reverse(keyStore))));
 

@@ -8,9 +8,9 @@ from typing import Dict, Tuple
 import sys
 from pathlib import Path
 from typeguard import typechecked
-from typeguard.importhook import install_import_hook
+# from typeguard.importhook import install_import_hook
 
-install_import_hook("lwc_api")
+# install_import_hook("lwc_api")
 
 
 # Proposed Python LWC API
