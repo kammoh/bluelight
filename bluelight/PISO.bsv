@@ -54,7 +54,7 @@ endinterface
 module mkPISO (PISO#(size, el_type)) provisos (Bits#(el_type, el_type_sz__), Add#(1,a__,size), Add#(2,b__,size));
   Reg#(Vector#(size, el_type)) vec <- mkRegU;
   Reg#(Vector#(size, Bool)) filled <- mkReg(replicate(False)); // only lsb needs to be 0
-  Reg#(Bool) last_block <- mkRegU;
+  Reg#(Bool) last_block <- mkReg(False);
 
   Bool not_empty = head(filled);
   Bool empty = !not_empty;

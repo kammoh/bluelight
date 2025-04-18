@@ -1,7 +1,7 @@
 name = 'Ascon-128_x1'
 
 [rtl]
-generator = "mkdir -p ${design_root}/gen_rtl/x1 && xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=1 --settings verilog_out_dir=${design_root}/gen_rtl/x1"
+generator = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=1 --settings verilog_out_dir=${design_root}/gen_rtl/x1"
 sources = [
     "gen_rtl/x1/lwc.v",
 ]

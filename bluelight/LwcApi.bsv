@@ -86,20 +86,20 @@ module mkLwc#(CryptoCoreIfc#(w__) cryptoCore, Bool ccIsLittleEndian,
     let sdiReceiver <- mkBusReceiver;
     let doSender    <- mkBusSender;
 
-    Reg#(Bit#(14))    pdiCounter       <- mkRegU;
-    Reg#(Bit#(14))    outCounter       <- mkRegU;
-    let               sdiCounter       <- mkRegU;
-    Reg#(Bit#(2))     finalRemainBytes <- mkRegU;
-    Reg#(Bit#(2))     outRemainder     <- mkRegU;
-    Reg#(Bool)        newKey           <- mkRegU; // should receive and use a new key
-    Reg#(Bool)        statFailure      <- mkRegU; // status use in output
-    Reg#(HeaderFlags) inFlags          <- mkRegU;
-    Reg#(Bool)        inSegLast        <- mkRegU;
-    Reg#(Bool)        inSegEoT         <- mkRegU;
-    Reg#(Bool)        outSegPt         <- mkRegU;
-    Reg#(Bool)        outSegLast       <- mkRegU;
-    Reg#(Bool)        op_decrypt       <- mkRegU;
-    Reg#(Bool)        op_encrypt       <- mkRegU;
+    Reg#(Bit#(14))    pdiCounter       <- mkReg(0);
+    Reg#(Bit#(14))    outCounter       <- mkReg(0);
+    Reg#(Bit#(4))     sdiCounter       <- mkReg(0);
+    Reg#(Bit#(2))     finalRemainBytes <- mkReg(0);
+    Reg#(Bit#(2))     outRemainder     <- mkReg(0);
+    Reg#(Bool)        newKey           <- mkReg(False); // should receive and use a new key
+    Reg#(Bool)        statFailure      <- mkReg(False); // status use in output
+    Reg#(HeaderFlags) inFlags          <- mkReg(HeaderFlags{});
+    Reg#(Bool)        inSegLast        <- mkReg(False);
+    Reg#(Bool)        inSegEoT         <- mkReg(False);
+    Reg#(Bool)        outSegPt         <- mkReg(False);
+    Reg#(Bool)        outSegLast       <- mkReg(False);
+    Reg#(Bool)        op_decrypt       <- mkReg(False);
+    Reg#(Bool)        op_encrypt       <- mkReg(False);
 
     let pdiState <- mkReg(Pdi_GetInstruction);
     let sdiState <- mkReg(SdiIdle);

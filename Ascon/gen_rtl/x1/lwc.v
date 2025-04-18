@@ -292,8 +292,8 @@ module lwc(clk,
   wire lwc_pdiState_EN;
 
   // register lwc_sdiCounter
-  reg [31 : 0] lwc_sdiCounter;
-  wire [31 : 0] lwc_sdiCounter_D_IN;
+  reg [3 : 0] lwc_sdiCounter;
+  wire [3 : 0] lwc_sdiCounter_D_IN;
   wire lwc_sdiCounter_EN;
 
   // register lwc_sdiReceiver_fifof_rv
@@ -345,14 +345,14 @@ module lwc(clk,
 		MUX_lwc_doSender_data_reg_write_1__VAL_2,
 		MUX_lwc_doSender_data_reg_write_1__VAL_3,
 		MUX_lwc_headersFifo_rv_port1__write_1__VAL_1;
-  wire [31 : 0] MUX_lwc_sdiCounter_write_1__VAL_1;
   wire [13 : 0] MUX_lwc_outCounter_write_1__VAL_1,
 		MUX_lwc_outCounter_write_1__VAL_2,
 		MUX_lwc_pdiCounter_write_1__VAL_1;
   wire [7 : 0] MUX_ascon_cipher_roundConstant_write_1__VAL_2,
 	       MUX_ascon_cipher_roundConstant_write_1__VAL_3;
   wire [3 : 0] MUX_ascon_cipher_roundCounter_write_1__VAL_2,
-	       MUX_ascon_cipher_roundCounter_write_1__VAL_3;
+	       MUX_ascon_cipher_roundCounter_write_1__VAL_3,
+	       MUX_lwc_sdiCounter_write_1__VAL_1;
   wire [2 : 0] MUX_ascon_cipher_postPermuteState_write_1__VAL_2,
 	       MUX_ascon_cipher_state_write_1__VAL_1,
 	       MUX_ascon_cipher_state_write_1__VAL_4,
@@ -431,19 +431,19 @@ module lwc(clk,
   wire [39 : 0] IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d245;
   wire [31 : 0] lwc_headersFifo_rv_BITS_31_TO_0__q4,
 		lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1,
-		sw__h48697,
-		x__h46093;
+		sw__h49190,
+		x__h46586;
   wire [23 : 0] IF_ascon_inLayer_valids_09_BIT_7_17_THEN_ascon_ETC___d238;
-  wire [13 : 0] x__h52437;
+  wire [13 : 0] x__h52930;
   wire [7 : 0] IF_ascon_bdiFlags_56_BIT_4_11_THEN_IF_ascon_in_ETC___d216,
 	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214,
-	       b__h49870,
-	       b__h51054,
-	       b__h51166,
-	       b__h51278,
+	       b__h50363,
+	       b__h51547,
+	       b__h51659,
+	       b__h51771,
 	       spliced_bits__h3337;
-  wire [3 : 0] a__h45471, oh__h45410, valid_bytes__h44682;
-  wire [1 : 0] x__h9056;
+  wire [3 : 0] a__h45964, oh__h45903, valid_bytes__h45175;
+  wire [1 : 0] x__h9292;
   wire NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605,
        NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625,
        _dand2ascon_inLayer_do_close_EN_wset,
@@ -589,17 +589,17 @@ module lwc(clk,
 	     WILL_FIRE_RL_ascon_rl_squeeze_tag_or_digest &&
 	     (ascon_cipher_squeezeCounter[0] || ascon_cipher_squeezeHash) ;
   assign MUX_ascon_cipher_state_write_1__SEL_5 =
-	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 32'd0 ;
+	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 4'd0 ;
   assign MUX_ascon_inLayer_needsPad_write_1__SEL_1 =
 	     WILL_FIRE_RL_lwc_get_pdi_data &&
 	     (lwc_pdiCounter[13:1] == 13'd0 && !lwc_inFlags[8] &&
 	      lwc_inSegEoT &&
 	      !lwc_pdiCounter[0] &&
-	      valid_bytes__h44682[3] ||
+	      valid_bytes__h45175[3] ||
 	      lwc_finalRemainBytes == 2'd0 && lwc_pdiCounter[13:1] == 13'd0 &&
 	      !lwc_inFlags[8] &&
 	      lwc_inSegEoT &&
-	      valid_bytes__h44682[3]) ;
+	      valid_bytes__h45175[3]) ;
   assign MUX_ascon_outLayer_enq_wire_wset_1__SEL_1 =
 	     WILL_FIRE_RL_ascon_rl_get_inlayer && ascon_bdiFlags[3] ;
   assign MUX_lwc_headersFifo_rv_port1__write_1__SEL_1 =
@@ -691,7 +691,7 @@ module lwc(clk,
 	       3'd0 :
 	       3'd3 ;
   assign MUX_ascon_inLayer_enq_wire_wset_1__VAL_1 =
-	     { x__h46093, valid_bytes__h44682 } ;
+	     { x__h46586, valid_bytes__h45175 } ;
   assign MUX_ascon_outLayer_enq_wire_wset_1__VAL_1 =
 	     { ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229,
 	       ascon_inLayer_block_01_BITS_7_TO_0_60_XOR_asco_ETC___d214,
@@ -708,7 +708,7 @@ module lwc(clk,
 	       8'd255 } ;
   assign MUX_lwc_doSender_data_reg_write_1__VAL_1 =
 	     { 1'd0, lwc_headersFifo_rv[31:0] } ;
-  assign MUX_lwc_doSender_data_reg_write_1__VAL_2 = { 1'd0, sw__h48697 } ;
+  assign MUX_lwc_doSender_data_reg_write_1__VAL_2 = { 1'd0, sw__h49190 } ;
   assign MUX_lwc_doSender_data_reg_write_1__VAL_3 =
 	     { 4'd15, lwc_statFailure, 28'b0 } ;
   assign MUX_lwc_headersFifo_rv_port1__write_1__VAL_1 =
@@ -729,7 +729,7 @@ module lwc(clk,
 	     (lwc_outCounter[13:1] == 13'd0 && !lwc_outCounter[0] ||
 	      lwc_outRemainder == 2'd0 && lwc_outCounter[13:1] == 13'd0) ?
 	       14'd4 :
-	       x__h52437 ;
+	       x__h52930 ;
   assign MUX_lwc_outState_write_1__VAL_2 =
 	     lwc_outSegLast ? (lwc_outSegPt ? 2'd2 : 2'd3) : 2'd0 ;
   assign MUX_lwc_outState_write_1__VAL_3 =
@@ -754,7 +754,7 @@ module lwc(clk,
 	     (lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[15:0] == 16'd0) ?
 	       3'd5 :
 	       3'd2 ;
-  assign MUX_lwc_sdiCounter_write_1__VAL_1 = lwc_sdiCounter - 32'd1 ;
+  assign MUX_lwc_sdiCounter_write_1__VAL_1 = lwc_sdiCounter - 4'd1 ;
 
   // inlined wires
   assign ascon_inLayer_enq_wire_wget =
@@ -1047,7 +1047,7 @@ module lwc(clk,
 	      ascon_cipher_loadNonceCounter && ascon_bdiFlags[7]) ||
 	     WILL_FIRE_RL_ascon_rl_squeeze_tag_or_digest &&
 	     (ascon_cipher_squeezeCounter[0] || ascon_cipher_squeezeHash) ||
-	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 32'd0 ;
+	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 4'd0 ;
 
   // register ascon_inLayer_block
   assign ascon_inLayer_block_D_IN =
@@ -1069,7 +1069,7 @@ module lwc(clk,
 
   // register ascon_inLayer_counter
   assign ascon_inLayer_counter_D_IN =
-	     ascon_inLayer_enq_wire_whas ? x__h9056 : 2'd0 ;
+	     ascon_inLayer_enq_wire_whas ? x__h9292 : 2'd0 ;
   assign ascon_inLayer_counter_EN = WILL_FIRE_RL_ascon_inLayer_rl_enq_deq ;
 
   // register ascon_inLayer_needsPad
@@ -1190,14 +1190,14 @@ module lwc(clk,
 	  MUX_lwc_outCounter_write_1__VAL_1 or
 	  MUX_lwc_outCounter_write_1__SEL_2 or
 	  MUX_lwc_outCounter_write_1__VAL_2 or
-	  WILL_FIRE_RL_lwc_verify_tag or x__h52437)
+	  WILL_FIRE_RL_lwc_verify_tag or x__h52930)
   begin
     case (1'b1) // synopsys parallel_case
       MUX_lwc_outCounter_write_1__SEL_1:
 	  lwc_outCounter_D_IN = MUX_lwc_outCounter_write_1__VAL_1;
       MUX_lwc_outCounter_write_1__SEL_2:
 	  lwc_outCounter_D_IN = MUX_lwc_outCounter_write_1__VAL_2;
-      WILL_FIRE_RL_lwc_verify_tag: lwc_outCounter_D_IN = x__h52437;
+      WILL_FIRE_RL_lwc_verify_tag: lwc_outCounter_D_IN = x__h52930;
       default: lwc_outCounter_D_IN =
 		   14'bxxxxxxxxxxxxxx /* unspecified value */ ;
     endcase
@@ -1312,7 +1312,7 @@ module lwc(clk,
   assign lwc_sdiCounter_D_IN =
 	     WILL_FIRE_RL_lwc_get_key_data ?
 	       MUX_lwc_sdiCounter_write_1__VAL_1 :
-	       32'd3 ;
+	       4'd3 ;
   assign lwc_sdiCounter_EN =
 	     WILL_FIRE_RL_lwc_get_key_data ||
 	     WILL_FIRE_RL_lwc_get_sdi_header ;
@@ -1338,7 +1338,7 @@ module lwc(clk,
   assign lwc_sdiState_EN =
 	     WILL_FIRE_RL_lwc_pdi_instruction &&
 	     lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[30] ||
-	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 32'd0 ||
+	     WILL_FIRE_RL_lwc_get_key_data && lwc_sdiCounter == 4'd0 ||
 	     WILL_FIRE_RL_lwc_get_sdi_inst ||
 	     WILL_FIRE_RL_lwc_get_sdi_header ;
 
@@ -1463,7 +1463,7 @@ module lwc(clk,
 		 ascon_inLayer_block[15:8] :
 		 ascon_inLayer_block_01_BITS_63_TO_8_18_XOR_asc_ETC___d229[7:0] } ;
   assign NOT_IF_lwc_tagFifo_rv_port0__read__69_BIT_32_7_ETC___d605 =
-	     lwc_tagFifo_rv[31:0] != sw__h48697 ;
+	     lwc_tagFifo_rv[31:0] != sw__h49190 ;
   assign NOT_lwc_outCounter_73_BITS_13_TO_1_06_EQ_0_07__ETC___d625 =
 	     lwc_outCounter[13:1] != 13'd0 ||
 	     lwc_outRemainder != 2'd0 && lwc_outCounter[0] ||
@@ -1476,7 +1476,7 @@ module lwc(clk,
 	      lwc_finalRemainBytes == 2'd0 && lwc_pdiCounter[13:1] == 13'd0 &&
 	      !lwc_inFlags[8] &&
 	      lwc_inSegEoT) ;
-  assign a__h45471 = oh__h45410 - 4'd1 ;
+  assign a__h45964 = oh__h45903 - 4'd1 ;
   assign ascon_cipher_asconState_BITS_191_TO_136_4_CONC_ETC___d29 =
 	     x__h3325 ^ ascon_cipher_asconState[127:64] ;
   assign ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d51 =
@@ -1514,59 +1514,59 @@ module lwc(clk,
 	     !ascon_inLayer_needsPad &&
 	     ascon_inLayer_closed &&
 	     ascon_outLayer_do_deq_whas ;
-  assign b__h49870 =
+  assign b__h50363 =
 	     ascon_outLayer_validsVec[3] ?
 	       ascon_outLayer_blockVec[31:24] :
 	       8'd0 ;
-  assign b__h51054 =
+  assign b__h51547 =
 	     ascon_outLayer_validsVec[2] ?
 	       ascon_outLayer_blockVec[23:16] :
 	       8'd0 ;
-  assign b__h51166 =
+  assign b__h51659 =
 	     ascon_outLayer_validsVec[1] ?
 	       ascon_outLayer_blockVec[15:8] :
 	       8'd0 ;
-  assign b__h51278 =
+  assign b__h51771 =
 	     ascon_outLayer_validsVec[0] ?
 	       ascon_outLayer_blockVec[7:0] :
 	       8'd0 ;
   assign lwc_headersFifo_rv_BITS_31_TO_0__q4 = lwc_headersFifo_rv[31:0] ;
   assign lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1 =
 	     lwc_pdiReceiver_fifof_rv[31:0] ;
-  assign oh__h45410 =
+  assign oh__h45903 =
 	     { lwc_finalRemainBytes == 2'd3,
 	       lwc_finalRemainBytes == 2'd2,
 	       lwc_finalRemainBytes == 2'd1,
 	       lwc_finalRemainBytes == 2'd0 } ;
   assign spliced_bits__h3337 =
 	     ascon_cipher_asconState[135:128] ^ ascon_cipher_roundConstant ;
-  assign sw__h48697 =
+  assign sw__h49190 =
 	     { (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[0] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h51278 :
+		 b__h51771 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[1] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h51166 :
+		 b__h51659 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[2] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h51054 :
+		 b__h51547 :
 		 8'd0,
 	       (ascon_outLayer_validsVec[7:4] != 4'd0 ||
 		ascon_outLayer_validsVec[3] ||
 		ascon_outLayer_validsVec[3:0] == 4'd0) ?
-		 b__h49870 :
+		 b__h50363 :
 		 8'd0 } ;
-  assign valid_bytes__h44682 =
+  assign valid_bytes__h45175 =
 	     (lwc_pdiCounter[13:1] != 13'd0 || !lwc_inSegEoT ||
 	      lwc_pdiCounter[0] ||
 	      lwc_finalRemainBytes == 2'd0) ?
 	       4'd15 :
-	       a__h45471 ;
+	       a__h45964 ;
   assign x__h1344 = x__h1346 ^ y__h1347 ;
   assign x__h1346 =
 	     ascon_cipher_asconState_BITS_319_TO_256_XOR_as_ETC___d6 ^
@@ -1574,20 +1574,20 @@ module lwc(clk,
 	     ascon_cipher_asconState[127:64] ;
   assign x__h3325 =
 	     { ascon_cipher_asconState[191:136], spliced_bits__h3337 } ;
-  assign x__h46093 =
-	     { valid_bytes__h44682[3] ?
+  assign x__h46586 =
+	     { valid_bytes__h45175[3] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[7:0] :
-		 (valid_bytes__h44682[2] ? 8'h80 : 8'd0),
-	       valid_bytes__h44682[2] ?
+		 (valid_bytes__h45175[2] ? 8'h80 : 8'd0),
+	       valid_bytes__h45175[2] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[15:8] :
-		 (valid_bytes__h44682[1] ? 8'h80 : 8'd0),
-	       valid_bytes__h44682[1] ?
+		 (valid_bytes__h45175[1] ? 8'h80 : 8'd0),
+	       valid_bytes__h45175[1] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[23:16] :
-		 (valid_bytes__h44682[0] ? 8'h80 : 8'd0),
-	       valid_bytes__h44682[0] ?
+		 (valid_bytes__h45175[0] ? 8'h80 : 8'd0),
+	       valid_bytes__h45175[0] ?
 		 lwc_pdiReceiver_fifof_rv_BITS_31_TO_0__q1[31:24] :
 		 8'h80 } ;
-  assign x__h52437 = lwc_outCounter - 14'd1 ;
+  assign x__h52930 = lwc_outCounter - 14'd1 ;
   assign x__h6479 = x__h6481 ^ y__h6482 ;
   assign x__h6481 = x__h6518 ^ y__h6519 ;
   assign x__h6518 =
@@ -1604,7 +1604,7 @@ module lwc(clk,
 	     ascon_cipher_asconState[255:192] ;
   assign x__h6978 = x__h6980 ^ y__h6981 ;
   assign x__h6980 = y__h6836 ^ x__h1346 ;
-  assign x__h9056 =
+  assign x__h9292 =
 	     WILL_FIRE_RL_ascon_rl_get_inlayer ?
 	       2'd1 :
 	       ascon_inLayer_counter + 2'd1 ;
@@ -1666,7 +1666,8 @@ module lwc(clk,
   begin
     if (rst == `BSV_RESET_VALUE)
       begin
-        ascon_cipher_first_block <= `BSV_ASSIGNMENT_DELAY 1'd0;
+        ascon_bdiFlags <= `BSV_ASSIGNMENT_DELAY 8'd0;
+	ascon_cipher_first_block <= `BSV_ASSIGNMENT_DELAY 1'd0;
 	ascon_cipher_loadNonceCounter <= `BSV_ASSIGNMENT_DELAY 1'd0;
 	ascon_cipher_postPermuteState <= `BSV_ASSIGNMENT_DELAY 3'd2;
 	ascon_cipher_roundConstant <= `BSV_ASSIGNMENT_DELAY 8'd0;
@@ -1677,27 +1678,44 @@ module lwc(clk,
 	ascon_inLayer_closed <= `BSV_ASSIGNMENT_DELAY 1'd0;
 	ascon_inLayer_counter <= `BSV_ASSIGNMENT_DELAY 2'd0;
 	ascon_inLayer_needsPad <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	ascon_inLayer_valids <= `BSV_ASSIGNMENT_DELAY 8'd0;
 	ascon_outLayer_validsVec <= `BSV_ASSIGNMENT_DELAY 8'd0;
 	lwc_doSender_data_valid <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_finalRemainBytes <= `BSV_ASSIGNMENT_DELAY 2'd0;
 	lwc_headersFifo_rv <= `BSV_ASSIGNMENT_DELAY
 	    { 1'd0,
 	      32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx /* unspecified value */  };
+	lwc_inFlags <= `BSV_ASSIGNMENT_DELAY
+	    9'bxxxxxxxxx /* unspecified value */ ;
+	lwc_inSegEoT <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_inSegLast <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_newKey <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_op_decrypt <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_outCounter <= `BSV_ASSIGNMENT_DELAY 14'd0;
+	lwc_outRemainder <= `BSV_ASSIGNMENT_DELAY 2'd0;
+	lwc_outSegLast <= `BSV_ASSIGNMENT_DELAY 1'd0;
+	lwc_outSegPt <= `BSV_ASSIGNMENT_DELAY 1'd0;
 	lwc_outState <= `BSV_ASSIGNMENT_DELAY 2'd0;
+	lwc_pdiCounter <= `BSV_ASSIGNMENT_DELAY 14'd0;
 	lwc_pdiReceiver_fifof_rv <= `BSV_ASSIGNMENT_DELAY
 	    { 1'd0,
 	      32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx /* unspecified value */  };
 	lwc_pdiState <= `BSV_ASSIGNMENT_DELAY 3'd0;
+	lwc_sdiCounter <= `BSV_ASSIGNMENT_DELAY 4'd0;
 	lwc_sdiReceiver_fifof_rv <= `BSV_ASSIGNMENT_DELAY
 	    { 1'd0,
 	      32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx /* unspecified value */  };
 	lwc_sdiState <= `BSV_ASSIGNMENT_DELAY 2'd0;
+	lwc_statFailure <= `BSV_ASSIGNMENT_DELAY 1'd0;
 	lwc_tagFifo_rv <= `BSV_ASSIGNMENT_DELAY
 	    { 1'd0,
 	      32'bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx /* unspecified value */  };
       end
     else
       begin
-        if (ascon_cipher_first_block_EN)
+        if (ascon_bdiFlags_EN)
+	  ascon_bdiFlags <= `BSV_ASSIGNMENT_DELAY ascon_bdiFlags_D_IN;
+	if (ascon_cipher_first_block_EN)
 	  ascon_cipher_first_block <= `BSV_ASSIGNMENT_DELAY
 	      ascon_cipher_first_block_D_IN;
 	if (ascon_cipher_loadNonceCounter_EN)
@@ -1729,31 +1747,59 @@ module lwc(clk,
 	if (ascon_inLayer_needsPad_EN)
 	  ascon_inLayer_needsPad <= `BSV_ASSIGNMENT_DELAY
 	      ascon_inLayer_needsPad_D_IN;
+	if (ascon_inLayer_valids_EN)
+	  ascon_inLayer_valids <= `BSV_ASSIGNMENT_DELAY
+	      ascon_inLayer_valids_D_IN;
 	if (ascon_outLayer_validsVec_EN)
 	  ascon_outLayer_validsVec <= `BSV_ASSIGNMENT_DELAY
 	      ascon_outLayer_validsVec_D_IN;
 	if (lwc_doSender_data_valid_EN)
 	  lwc_doSender_data_valid <= `BSV_ASSIGNMENT_DELAY
 	      lwc_doSender_data_valid_D_IN;
+	if (lwc_finalRemainBytes_EN)
+	  lwc_finalRemainBytes <= `BSV_ASSIGNMENT_DELAY
+	      lwc_finalRemainBytes_D_IN;
 	if (lwc_headersFifo_rv_EN)
 	  lwc_headersFifo_rv <= `BSV_ASSIGNMENT_DELAY lwc_headersFifo_rv_D_IN;
+	if (lwc_inFlags_EN)
+	  lwc_inFlags <= `BSV_ASSIGNMENT_DELAY lwc_inFlags_D_IN;
+	if (lwc_inSegEoT_EN)
+	  lwc_inSegEoT <= `BSV_ASSIGNMENT_DELAY lwc_inSegEoT_D_IN;
+	if (lwc_inSegLast_EN)
+	  lwc_inSegLast <= `BSV_ASSIGNMENT_DELAY lwc_inSegLast_D_IN;
+	if (lwc_newKey_EN)
+	  lwc_newKey <= `BSV_ASSIGNMENT_DELAY lwc_newKey_D_IN;
+	if (lwc_op_decrypt_EN)
+	  lwc_op_decrypt <= `BSV_ASSIGNMENT_DELAY lwc_op_decrypt_D_IN;
+	if (lwc_outCounter_EN)
+	  lwc_outCounter <= `BSV_ASSIGNMENT_DELAY lwc_outCounter_D_IN;
+	if (lwc_outRemainder_EN)
+	  lwc_outRemainder <= `BSV_ASSIGNMENT_DELAY lwc_outRemainder_D_IN;
+	if (lwc_outSegLast_EN)
+	  lwc_outSegLast <= `BSV_ASSIGNMENT_DELAY lwc_outSegLast_D_IN;
+	if (lwc_outSegPt_EN)
+	  lwc_outSegPt <= `BSV_ASSIGNMENT_DELAY lwc_outSegPt_D_IN;
 	if (lwc_outState_EN)
 	  lwc_outState <= `BSV_ASSIGNMENT_DELAY lwc_outState_D_IN;
+	if (lwc_pdiCounter_EN)
+	  lwc_pdiCounter <= `BSV_ASSIGNMENT_DELAY lwc_pdiCounter_D_IN;
 	if (lwc_pdiReceiver_fifof_rv_EN)
 	  lwc_pdiReceiver_fifof_rv <= `BSV_ASSIGNMENT_DELAY
 	      lwc_pdiReceiver_fifof_rv_D_IN;
 	if (lwc_pdiState_EN)
 	  lwc_pdiState <= `BSV_ASSIGNMENT_DELAY lwc_pdiState_D_IN;
+	if (lwc_sdiCounter_EN)
+	  lwc_sdiCounter <= `BSV_ASSIGNMENT_DELAY lwc_sdiCounter_D_IN;
 	if (lwc_sdiReceiver_fifof_rv_EN)
 	  lwc_sdiReceiver_fifof_rv <= `BSV_ASSIGNMENT_DELAY
 	      lwc_sdiReceiver_fifof_rv_D_IN;
 	if (lwc_sdiState_EN)
 	  lwc_sdiState <= `BSV_ASSIGNMENT_DELAY lwc_sdiState_D_IN;
+	if (lwc_statFailure_EN)
+	  lwc_statFailure <= `BSV_ASSIGNMENT_DELAY lwc_statFailure_D_IN;
 	if (lwc_tagFifo_rv_EN)
 	  lwc_tagFifo_rv <= `BSV_ASSIGNMENT_DELAY lwc_tagFifo_rv_D_IN;
       end
-    if (ascon_bdiFlags_EN)
-      ascon_bdiFlags <= `BSV_ASSIGNMENT_DELAY ascon_bdiFlags_D_IN;
     if (ascon_cipher_asconState_EN)
       ascon_cipher_asconState <= `BSV_ASSIGNMENT_DELAY
 	  ascon_cipher_asconState_D_IN;
@@ -1762,38 +1808,12 @@ module lwc(clk,
 	  ascon_cipher_keyStore_D_IN;
     if (ascon_inLayer_block_EN)
       ascon_inLayer_block <= `BSV_ASSIGNMENT_DELAY ascon_inLayer_block_D_IN;
-    if (ascon_inLayer_valids_EN)
-      ascon_inLayer_valids <= `BSV_ASSIGNMENT_DELAY ascon_inLayer_valids_D_IN;
     if (ascon_outLayer_blockVec_EN)
       ascon_outLayer_blockVec <= `BSV_ASSIGNMENT_DELAY
 	  ascon_outLayer_blockVec_D_IN;
     if (lwc_doSender_data_reg_EN)
       lwc_doSender_data_reg <= `BSV_ASSIGNMENT_DELAY
 	  lwc_doSender_data_reg_D_IN;
-    if (lwc_finalRemainBytes_EN)
-      lwc_finalRemainBytes <= `BSV_ASSIGNMENT_DELAY lwc_finalRemainBytes_D_IN;
-    if (lwc_inFlags_EN) lwc_inFlags <= `BSV_ASSIGNMENT_DELAY lwc_inFlags_D_IN;
-    if (lwc_inSegEoT_EN)
-      lwc_inSegEoT <= `BSV_ASSIGNMENT_DELAY lwc_inSegEoT_D_IN;
-    if (lwc_inSegLast_EN)
-      lwc_inSegLast <= `BSV_ASSIGNMENT_DELAY lwc_inSegLast_D_IN;
-    if (lwc_newKey_EN) lwc_newKey <= `BSV_ASSIGNMENT_DELAY lwc_newKey_D_IN;
-    if (lwc_op_decrypt_EN)
-      lwc_op_decrypt <= `BSV_ASSIGNMENT_DELAY lwc_op_decrypt_D_IN;
-    if (lwc_outCounter_EN)
-      lwc_outCounter <= `BSV_ASSIGNMENT_DELAY lwc_outCounter_D_IN;
-    if (lwc_outRemainder_EN)
-      lwc_outRemainder <= `BSV_ASSIGNMENT_DELAY lwc_outRemainder_D_IN;
-    if (lwc_outSegLast_EN)
-      lwc_outSegLast <= `BSV_ASSIGNMENT_DELAY lwc_outSegLast_D_IN;
-    if (lwc_outSegPt_EN)
-      lwc_outSegPt <= `BSV_ASSIGNMENT_DELAY lwc_outSegPt_D_IN;
-    if (lwc_pdiCounter_EN)
-      lwc_pdiCounter <= `BSV_ASSIGNMENT_DELAY lwc_pdiCounter_D_IN;
-    if (lwc_sdiCounter_EN)
-      lwc_sdiCounter <= `BSV_ASSIGNMENT_DELAY lwc_sdiCounter_D_IN;
-    if (lwc_statFailure_EN)
-      lwc_statFailure <= `BSV_ASSIGNMENT_DELAY lwc_statFailure_D_IN;
   end
 
   // synopsys translate_off
@@ -1837,7 +1857,7 @@ module lwc(clk,
     lwc_pdiCounter = 14'h2AAA;
     lwc_pdiReceiver_fifof_rv = 33'h0AAAAAAAA;
     lwc_pdiState = 3'h2;
-    lwc_sdiCounter = 32'hAAAAAAAA;
+    lwc_sdiCounter = 4'hA;
     lwc_sdiReceiver_fifof_rv = 33'h0AAAAAAAA;
     lwc_sdiState = 2'h2;
     lwc_statFailure = 1'h0;

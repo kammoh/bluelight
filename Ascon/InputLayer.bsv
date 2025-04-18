@@ -28,9 +28,9 @@ provisos (
 );
     //==== Registers ====//
     Reg#(Vector#(block_words, CoreWord)) block <- mkRegU;
-    Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkRegU;
+    Reg#(Vector#(block_words, Bit#(CoreWordBytes))) valids <- mkReg(replicate(0));
     Reg#(Bit#(TLog#(TAdd#(block_words, 1)))) counter <- mkReg(0);
-    // Reg#(Bool) isLast   <- mkRegU;
+    // Reg#(Bool) isLast   <- mkReg(False);
     Reg#(Bool) closed   <- mkReg(False);
     Reg#(Bool) needsPad <- mkReg(False); // only set with with closing word
     

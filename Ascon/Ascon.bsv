@@ -21,7 +21,16 @@ module mkAscon(CryptoCoreIfc#(w__)) provisos (NumAlias#(w__, 32));
     Byte padByte = 8'h80;
     let inLayer <- mkInputLayer(padByte);
     let outLayer <- mkOutputLayer;
-    let bdiFlags <- mkRegU;
+    let bdiFlags <- mkReg(Flags {
+        npub: False,
+        ad: False,
+        emptyAD: False,
+        ct: False,
+        ptct: False,
+        hm: False,
+        ptCtHm: False,
+        ptCtAd: False
+    });
     
     (* doc = "the output of inputLayer" *)
     let inBlock_probe <- mkProbe();
