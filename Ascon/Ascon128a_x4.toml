@@ -1,9 +1,9 @@
-name = 'Ascon-128a_x2'
+name = 'Ascon-128a_x4'
 
 [rtl]
-generator.command = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=2 rtl.parameters.ASCON128A=1 --settings verilog_out_dir=${DESIGN_ROOT}/gen_rtl/Ascon128a/x2"
+generator.command = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=4 rtl.parameters.ASCON128A=1 --settings verilog_out_dir=${DESIGN_ROOT}/gen_rtl/Ascon128a/x4"
 generator.sources = ["*.bsv", "*/*.bsv"]
-sources = ["gen_rtl/Ascon128a/x2/lwc.v"]
+sources = ["gen_rtl/Ascon128a/x4/lwc.v"]
 top = "lwc"
 clock.port = "clk"
 
@@ -25,7 +25,7 @@ cocotb = true
 
 [flows.vivado_synth]
 fpga.part = "xc7a100tftg256-2L"
-clock.freq = "198MHz"
+# clock.freq = "100MHz"
 flatten_hierarchy = "full"
 synth.strategy = "Flow_AreaOptimized_high"
 synth.steps.SYNTH_DESIGN.ARGS.GLOBAL_RETIMING = "on"
