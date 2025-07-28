@@ -260,11 +260,11 @@ class ValidReadyTester:
             self.log.info("starting clock...")
             # clock = Clock(self.clock, period=self.clock_period)
             # self._forked_clock = await cocotb.start(clock.start())
-            await cocotb.start(Clock(self.dut.clk, 10, units="ns").start())
+            await cocotb.start(Clock(self.dut.clk, self.clock_period).start())
             await RisingEdge(self.clock)
             await FallingEdge(self.clock)
             await RisingEdge(self.clock)
             self.log.info("reseting...")
-            await self.reset_dut(2.5 * self.clock_period)
+            await self.reset_dut(2 * self.clock_period)
             self.log.info("reset DONE")
             self.started = True

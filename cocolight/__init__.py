@@ -235,6 +235,7 @@ class LwcRefCheckerTb(LwcTb):
         ad_size = op_dict.get("ad_size")
         xt_size = op_dict.get("xt_size")
         hm_size = op_dict.get("hm_size")
+        t0 = get_sim_time()
         if op == "enc":
             assert ad_size is not None and xt_size is not None
             await self.xenc_test(ad_size=ad_size, pt_size=xt_size)
@@ -244,13 +245,12 @@ class LwcRefCheckerTb(LwcTb):
         elif op == "hash":
             assert hm_size is not None
             await self.xhash_test(hm_size=hm_size)
-        t0 = get_sim_time("ns")
         await self.launch_monitors()
         await self.launch_drivers()
         await self.join_drivers(timeout)
         await self.join_monitors(timeout)
-        t1 = get_sim_time("ns")
+        t1 = get_sim_time()
         delta = t1 - t0
         cycles = int(round(delta / self.clock_period))
-        # print(f"t0={t0}, t1={t1}, delta={t1 - t0}ns cycles={cycles}")
+        print(f"{op} xt={xt_size} ad={ad_size}   t0={t0}, t1={t1}, delta={t1 - t0}ns cycles={cycles}")
         return cycles - 1  # consistent with VHDL TB

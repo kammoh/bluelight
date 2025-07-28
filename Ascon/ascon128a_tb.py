@@ -384,6 +384,16 @@ async def measure_timings(dut: HierarchyObject):
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
             results[f"{bt} {sz}"] = cycles
+            db_results.append(
+                {
+                    "Cycles": cycles,
+                    "Op": op.capitalize().capitalize(),
+                    "Reuse Key": "False",
+                    "Throughput": f"{sz / cycles}",
+                    "adBytes": "0",
+                    "msgBytes": str(sz),
+                }
+            )
         for x in [4, 5]:
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=x * block_bits[bt] // 8))
             results[f"{bt} {x}BS"] = cycles
@@ -448,7 +458,7 @@ async def measure_timings(dut: HierarchyObject):
         results[f"{bt} Long"] = results[f"{bt} 5BS"] - results[f"{bt} 4BS"]
         all_results[op] = results
 
-    # pprint(all_results)
+    pprint(all_results)
     import json
     print(json.dumps(db_results, indent=2))
 
