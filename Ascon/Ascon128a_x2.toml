@@ -1,9 +1,9 @@
-name = 'Ascon-128a_x1'
+name = 'Ascon-128a_x2'
 
 [rtl]
-generator.command = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=1 rtl.parameters.ASCON128A=1 --settings verilog_out_dir=${DESIGN_ROOT}/gen_rtl/Ascon128a/x1"
-generator.sources = ["*.bsv", "*/*.bsv"]
-sources = ["gen_rtl/Ascon128a/x1/lwc.v"]
+generator.command = "xeda run bsc --design-name Ascon --design-overrides rtl.parameters.UNROLL_FACTOR=2 rtl.parameters.ASCON128A=1 --settings verilog_out_dir=${DESIGN_ROOT}/gen_rtl/Ascon128a/x2"
+# generator.sources = "*.bsv"
+sources = ["gen_rtl/Ascon128a/x2/lwc.v"]
 top = "lwc"
 clock.port = "clk"
 

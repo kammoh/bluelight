@@ -43,13 +43,13 @@ class Cref(LwcCffi, LwcAead, LwcHash):
         self, aead_algorithm, hash_algorithm=None, root_cref_dir=Path(SCRIPT_DIR) / "cref"
     ) -> None:
         Cref.aead_algorithm = aead_algorithm
-        Cref.hash_algorithm = hash_algorithm
+        # Cref.hash_algorithm = hash_algorithm
         Cref.root_cref_dir = root_cref_dir
         LwcCffi.__init__(self, force_recompile=True)
 
 
 ref = Cref(aead_algorithm="ascon128av12", hash_algorithm="asconhashav12")
-block_bits = dict(AD=64, PT=64, HM=64)
+block_bits = dict(AD=128, PT=128, HM=128)
 block_bits["XT"] = block_bits["CT"] = block_bits["PT"]
 
 XT_BS = block_bits["PT"] // 8
@@ -85,7 +85,7 @@ class RefCheckerTb(LwcRefCheckerTb):
 @cocotb.test()
 async def test0(dut: HierarchyObject):
     dut._log.info("starting clock")
-    await cocotb.start(Clock(dut.clk, 10).start())
+    await cocotb.start(Clock(dut.clk, 10, units="ns").start())
     dut._log.info("clock started")
     await Timer(5)
     dut._log.info("after timer")
@@ -97,7 +97,7 @@ async def test0(dut: HierarchyObject):
     dut._log.info("reset done")
 
 
-@cocotb.test()
+@cocotb.test(skip=False)
 async def debug_enc(dut: HierarchyObject):
     """Debug LWC Encryption"""
     debug = True
@@ -344,6 +344,7 @@ async def measure_timings(dut: HierarchyObject):
 
     await tb.start()
 
+    db_results = []
     all_results = {}
 
     sizes = [16, 64, 1536]
@@ -354,10 +355,31 @@ async def measure_timings(dut: HierarchyObject):
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=0))
             results[f"{bt} {sz}"] = cycles
+            db_results.append(
+                {
+                    "Cycles": cycles,
+                    "Op": op.capitalize().capitalize(),
+                    "Reuse Key": "False",
+                    "Throughput": f"{sz / cycles}",
+                    "adBytes": str(sz),
+                    "msgBytes": "0",
+                }
+            )
         for x in [4, 5]:
             cycles = await tb.measure_op(dict(op=op, ad_size=x * block_bits[bt] // 8, xt_size=0))
             results[f"{bt} {x}BS"] = cycles
         results[f"{bt} Long"] = results[f"{bt} 5BS"] - results[f"{bt} 4BS"]
+
+        db_results.append(
+            {
+                "Cycles": results[f"{bt} Long"],
+                "Op": op.capitalize().capitalize(),
+                "Reuse Key": "False",
+                "Throughput": f"{AD_BS / results[f"{bt} Long"]}",
+                "adBytes": "long",
+                "msgBytes": "0",
+            }
+        )
         bt = "XT"
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=sz))
@@ -366,11 +388,32 @@ async def measure_timings(dut: HierarchyObject):
             cycles = await tb.measure_op(dict(op=op, ad_size=0, xt_size=x * block_bits[bt] // 8))
             results[f"{bt} {x}BS"] = cycles
         results[f"{bt} Long"] = results[f"{bt} 5BS"] - results[f"{bt} 4BS"]
+
+        db_results.append(
+            {
+                "Cycles": results[f"{bt} Long"],
+                "Op": op.capitalize().capitalize(),
+                "Reuse Key": "False",
+                "Throughput": f"{XT_BS / results[f"{bt} Long"]}",
+                "adBytes": "0",
+                "msgBytes": "long",
+            }
+        )
         bt = "AD+XT"
         for sz in sizes:
             cycles = await tb.measure_op(dict(op=op, ad_size=sz, xt_size=sz))
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f"{bt} {sz}"] = cycles
+            db_results.append(
+                {
+                    "Cycles": cycles,
+                    "Op": op.capitalize().capitalize(),
+                    "Reuse Key": "False",
+                    "Throughput": f"{(2 * sz) / cycles}",
+                    "adBytes": str(sz),
+                    "msgBytes": str(sz),
+                }
+            )
         for x in [4, 5]:
             cycles = await tb.measure_op(
                 dict(op=op, ad_size=x * block_bits["AD"] // 8, xt_size=x * block_bits["XT"] // 8)
@@ -378,6 +421,17 @@ async def measure_timings(dut: HierarchyObject):
             # print(f'{op} PT={sz} AD=0: {cycles}')
             results[f"{bt} {x}BS"] = cycles
         results[f"{bt} Long"] = results[f"{bt} 5BS"] - results[f"{bt} 4BS"]
+
+        db_results.append(
+            {
+                "Cycles": results[f"{bt} Long"],
+                "Op": op.capitalize().capitalize(),
+                "Reuse Key": "False",
+                "Throughput": f"{(XT_BS + AD_BS) / results[f"{bt} Long"]}",
+                "adBytes": "long",
+                "msgBytes": "long",
+            }
+        )
         all_results[op] = results
 
     if tb.supports_hash:
@@ -394,7 +448,9 @@ async def measure_timings(dut: HierarchyObject):
         results[f"{bt} Long"] = results[f"{bt} 5BS"] - results[f"{bt} 4BS"]
         all_results[op] = results
 
-    pprint(all_results)
+    # pprint(all_results)
+    import json
+    print(json.dumps(db_results, indent=2))
 
 
 if __name__ == "__main__":

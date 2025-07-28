@@ -3,6 +3,8 @@ package Xoodyak2x;
 import Vector::*;
 import GetPut::*;
 
+import LwcApi :: *;
+import BluelightUtils :: *;
 import XoodooDefs::*;
 import SIPO::*;
 import PISO::*;
@@ -25,7 +27,7 @@ typedef enum {
 // (* synthesize *)
 module mkXoodyak(CryptoCoreIfc);
   MyShiftReg#(MaxOutRateLanes, XoodooLane) sipoLo <- mkMyShiftReg;
-  MyShiftRegWSO#(5, XoodooLane) sipoHi <- mkMyShiftRegWSO;
+  MyShiftReg#(5, XoodooLane) sipoHi <- mkMyShiftReg;
   Reg#(UInt#(TLog#(TAdd#(MaxInRateLanes,1)))) sipoCount <- mkReg(0); // either reset to 0 or assign to 0 on process()
   // 1 bit for each byte in every the input sipo lane
   MyShiftReg#(MaxOutRateLanes, Bit#(4)) sipoFlags <- mkMyShiftReg;

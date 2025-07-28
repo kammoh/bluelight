@@ -82,7 +82,8 @@ module mkAsconCipher #(parameter Bool ascon128a) (CipherIfc#(BlockBytes, Flags))
     Reg#(Bit#(TLog#(pa_cycles))) roundCounter <- mkReg(0);
     Reg#(RoundConstant) roundConstant <- mkReg(0);
     Reg#(Bit#(2)) squeezeCounter <- mkReg(0); // 2 bits if supports hash, o/w 1 bit
-    Reg#(Bit#(TLog#(TDiv#(NonceBits, TMul#(BlockBytes, 8))))) loadNonceCounter <- mkReg(0);
+    // Reg#(Bit#(TLog#(TDiv#(NonceBits,TMul#(BlockBytes, 8))))) loadNonceCounter <- mkReg(0);
+    Reg#(Bit#(2)) loadNonceCounter <- mkReg(0);
     Reg#(Bool) squeezeHash <- mkReg(False);
     Reg#(Bool) first_block <- mkReg(False); // first block of a type
 
@@ -114,8 +115,13 @@ module mkAsconCipher #(parameter Bool ascon128a) (CipherIfc#(BlockBytes, Flags))
         s[1] = ks[0];
         s[2] = ks[1];
         let npub = bytesToWords(npubBlock);
-        for (Integer i = 0; i < rateWords; i = i + 1)
-            s[5 - rateWords + i] = npub[i];
+        if (ascon128a) begin
+            s[3] = npub[0];
+            s[4] = npub[1];
+        end else begin
+            for (Integer i = 0; i < rateWords; i = i + 1)
+                s[4] = npub[0];
+        end
         return s;
     endfunction
 
@@ -176,12 +182,17 @@ module mkAsconCipher #(parameter Bool ascon128a) (CipherIfc#(BlockBytes, Flags))
         absorbedState[4][0] = absorbedState[4][0] ^ pack(firstPtCt); // last bit of state
 
         if (flags.npub) begin
-            loadNonceCounter <= loadNonceCounter + 1;
-            if (loadNonceCounter == 1) begin
+            if (ascon128a) begin
                 asconState <= keyNonceInit(block, storedKey);
                 state <= Permute;
-            end else
-                asconState[3] <= bytesToWord(take(block)); // Npub_0
+            end else begin
+                loadNonceCounter <= loadNonceCounter + 1;
+                if (loadNonceCounter == 1) begin
+                    asconState <= keyNonceInit(block, storedKey);
+                    state <= Permute;
+                end else
+                    asconState[3] <= bytesToWord(take(block)); // Npub_0
+            end
         end else begin
             asconState <= absorbedState;
             if (!flags.emptyAD)

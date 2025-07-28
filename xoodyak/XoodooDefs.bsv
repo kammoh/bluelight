@@ -1,6 +1,7 @@
 package XoodooDefs;
 
 import Vector :: *;
+
 import CryptoCore :: *;
 
 typedef 32 LaneWidth;
@@ -99,7 +100,7 @@ endinterface
 
 (* synthesize *)
 module mkPerm (PermIfc);
-  let permuted_state <- mkBypassWire();
+  let permuted_state <- mkWire();
 
   method ActionValue#(XoodooState) state_out;
     return permuted_state;

@@ -1,4 +1,4 @@
-#define ASCON_PRINT_STATE
+// #define ASCON_PRINT_STATE
 
 #ifdef ASCON_PRINT_STATE
 #include "printstate.h"

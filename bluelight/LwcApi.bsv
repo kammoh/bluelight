@@ -93,7 +93,17 @@ module mkLwc#(CryptoCoreIfc#(w__) cryptoCore, Bool ccIsLittleEndian,
     Reg#(Bit#(2))     outRemainder     <- mkReg(0);
     Reg#(Bool)        newKey           <- mkReg(False); // should receive and use a new key
     Reg#(Bool)        statFailure      <- mkReg(False); // status use in output
-    Reg#(HeaderFlags) inFlags          <- mkReg(HeaderFlags{});
+    Reg#(HeaderFlags) inFlags          <- mkReg(HeaderFlags{
+        npub:         False,
+        length:       False,
+        ad:           False,
+        pt:           False,
+        ct:           False,
+        ptct:         False,
+        hm:           False,
+        empty:        False,
+        end_of_input: False
+    });
     Reg#(Bool)        inSegLast        <- mkReg(False);
     Reg#(Bool)        inSegEoT         <- mkReg(False);
     Reg#(Bool)        outSegPt         <- mkReg(False);

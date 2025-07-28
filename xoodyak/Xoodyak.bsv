@@ -4,10 +4,12 @@ import Vector :: *;
 import GetPut :: *;
 import Assert :: *;
 
-import XoodooDefs :: *;
-import SIPO       :: *;
-import PISO       :: *;
-import CryptoCore :: *;
+import LwcApi         :: *;
+import BluelightUtils :: *;
+import XoodooDefs     :: *;
+import SIPO           :: *;
+import PISO           :: *;
+import CryptoCore     :: *;
 
 typedef XoodyakRounds NumRounds;
 
@@ -170,17 +172,17 @@ module mkXoodyak(CryptoCoreIfc#(32)) provisos (NumAlias#(w__, 32));
 
     // ******************************* Methods and subinterfaces **********************************
     /// Start a new operation ///
-    method Action start (Bool new_key, Bool decrypt, Bool hash) if (in_state == S_Idle);
+    method Action start (OpFlags op) if (in_state == S_Idle);
     `ifdef DEBUG
-        dynamicAssert(new_key, "Key reuse is not supported!");
+        dynamicAssert(op.new_key, "Key reuse is not supported!");
     `endif
         // any registers changed here can ONLY be used in data() or key() methods
         first_block <= True;
-        in_state <= hash ? S_ReceiveData : S_ReceiveKey;
+        in_state <= op.hash ? S_ReceiveData : S_ReceiveKey;
     endmethod
 
     // Receive AEAD Key ///
-    method Action key_in (Bit#(w__) data, Bool last) if (in_state == S_ReceiveKey);
+    method Action loadKey (Bit#(w__) data, Bool last) if (in_state == S_ReceiveKey);
         sipo.enq(data);
         valid_bytes_sr.enq('hf);
     `ifdef ROUND2
@@ -204,7 +206,7 @@ module mkXoodyak(CryptoCoreIfc#(32)) provisos (NumAlias#(w__, 32));
     endmethod
 
     /// Receive data ///
-    method Action data_in (Bit#(w__) data, Bit#(TDiv#(w__, 8)) valid_bytes, Bit#(TDiv#(w__, 8)) pad_loc, Bool last, HeaderFlags flags) if (in_state == S_ReceiveData);
+    method Action loadData (Bit#(w__) data, Bit#(TDiv#(w__, 8)) valid_bytes, Bit#(TDiv#(w__, 8)) pad_loc, Bool last, HeaderFlags flags) if (in_state == S_ReceiveData);
         let padded           = valid_bytes[3] == 0;
         let empty            = valid_bytes[0] == 0;
         let first_hm         = flags.hm && first_block;

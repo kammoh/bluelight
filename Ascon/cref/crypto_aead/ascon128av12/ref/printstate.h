@@ -1,7 +1,7 @@
 #ifndef PRINTSTATE_H_
 #define PRINTSTATE_H_
 
-#define ASCON_PRINT_STATE
+// #define ASCON_PRINT_STATE
 #ifdef ASCON_PRINT_STATE
 
 #include "ascon.h"
